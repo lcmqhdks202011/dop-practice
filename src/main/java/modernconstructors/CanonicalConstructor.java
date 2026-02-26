@@ -21,7 +21,8 @@ public class CanonicalConstructor {
     static void main() {
         var person1 = new Person("Kim", "Jun");
 
-        log.info("firstname: {}", person1.firstName());
+        log.info("{}", person1);
+        //05:23:34.904 INFO  {           main} } : Person[firstName=Kim, lastName=JUN]
     }
 
 
