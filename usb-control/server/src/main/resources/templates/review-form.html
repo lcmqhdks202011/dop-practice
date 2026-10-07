@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('점검하기')}"></head>
+<body>
+<div th:replace="~{fragments :: top('reviews')}"></div>
+<main>
+    <h1>정기 점검</h1>
+    <form method="get" th:action="@{/reviews/new}" class="toolbar">
+        <div><label>점검 기간 시작</label><input type="date" name="from" th:value="${from}"></div>
+        <div><label>끝</label><input type="date" name="to" th:value="${to}"></div>
+        <button type="submit" class="sub">기간 바꾸기</button>
+    </form>
+
+    <div class="tiles">
+        <div class="tile"><div class="label">기간 중 차단</div><div class="value" th:text="${counts.blocked}">0</div>
+            <a th:href="@{/events(from=${from},to=${to},type='차단')}" target="_blank">차단 기록 보기</a></div>
+        <div class="tile"><div class="label">기간 중 허용 매체 사용</div><div class="value" th:text="${counts.allowed}">0</div>
+            <a th:href="@{/events(from=${from},to=${to},type='허용')}" target="_blank">허용 기록 보기</a></div>
+        <div class="tile"><div class="label">지금 사용 중인 허용 매체</div><div class="value" th:text="${counts.activeDevices}">0</div>
+            <a th:href="@{/devices}" target="_blank">관리대장 보기</a></div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">점검할 것</h2>
+        <ul>
+            <li>같은 사람이 반복해서 차단된 적이 있는지 (무단 사용 시도)</li>
+            <li>허용 매체 중 퇴사자, 사용이 끝난 매체가 남아 있지 않은지</li>
+            <li><a th:href="@{/pcs}" target="_blank">PC 적용 현황</a>에 연결이 끊긴 PC가 없는지, <a th:href="@{/events(from=${from},to=${to},type='기타')}" target="_blank">프로그램이 제거된 PC</a>가 없는지</li>
+            <li><a th:href="@{/audit}" target="_blank">관리 이력</a>에 승인 없이 등록된 매체나 이상한 작업이 없는지</li>
+        </ul>
+    </div>
+
+    <form class="card" method="post" th:action="@{/reviews}">
+        <input type="hidden" name="from" th:value="${from}">
+        <input type="hidden" name="to" th:value="${to}">
+        <div class="form-grid">
+            <div><label>점검 결과 *</label>
+                <select name="result"><option th:each="r : ${results}" th:value="${r}" th:text="${r}"></option></select></div>
+            <div class="wide"><label>점검 내용 *</label>
+                <textarea name="memo" rows="5" required placeholder="예: 차단 3건 확인, 모두 개인 USB 사용 시도로 당사자 안내 완료. 퇴사자 매체 1건 회수."></textarea></div>
+        </div>
+        <div style="margin-top:16px"><button type="submit">점검 기록 저장</button></div>
+    </form>
+</main>
+</body>
+</html>

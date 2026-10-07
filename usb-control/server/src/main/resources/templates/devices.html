@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('허용 매체')}"></head>
+<body>
+<div th:replace="~{fragments :: top('devices')}"></div>
+<main>
+    <h1>허용 매체 (보조저장매체 관리대장)</h1>
+    <div class="toolbar">
+        <form method="get" th:action="@{/devices}" class="toolbar" style="margin:0">
+            <div><label>상태</label>
+                <select name="status" onchange="this.form.submit()">
+                    <option th:each="s : ${ {'사용 중','만료','회수','전체'} }" th:value="${s}" th:text="${s}" th:selected="${s == status}"></option>
+                </select></div>
+        </form>
+        <a class="btn" th:href="@{/devices/new}">새 매체 등록</a>
+        <a class="btn sub" th:href="@{/devices/export}">관리대장 엑셀 내려받기</a>
+    </div>
+    <p class="hint">USB를 허용하려면: 직원이 USB를 꽂으면 차단되고 <a th:href="@{/events}">사용 기록</a>에 남습니다. 거기서 [허용 등록]을 누르면 장치 ID가 자동으로 채워집니다.</p>
+    <div class="table-wrap">
+        <table>
+            <tr><th>관리번호</th><th>매체명</th><th>사용자</th><th>부서</th><th>사용 목적</th><th>승인자</th><th>적용 PC</th><th>등록일</th><th>만료일</th><th>상태</th></tr>
+            <tr th:if="${devices.isEmpty()}"><td colspan="10">없습니다.</td></tr>
+            <tr th:each="d : ${devices}">
+                <td><a th:href="@{/devices/{id}/edit(id=${d.id})}" th:text="${d.id}"></a></td>
+                <td><span th:text="${d.deviceName}"></span><div class="hint" th:text="${d.instanceId}"></div></td>
+                <td th:text="${d.owner}"></td>
+                <td th:text="${d.department}"></td>
+                <td th:text="${d.purpose}"></td>
+                <td th:text="${d.approver}"></td>
+                <td th:text="${d.pcName == null} ? '전체' : ${d.pcName}"></td>
+                <td th:text="${#temporals.format(d.registeredAt, 'yyyy-MM-dd')}"></td>
+                <td th:text="${d.expiresOn == null} ? '없음' : ${d.expiresOn}"></td>
+                <td><span class="badge" th:classappend="${d.status == '사용 중'} ? 'ok' : 'muted'" th:text="${d.status}"></span></td>
+            </tr>
+        </table>
+    </div>
+</main>
+</body>
+</html>

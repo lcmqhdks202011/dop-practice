@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('현황')}"></head>
+<body>
+<div th:replace="~{fragments :: top('home')}"></div>
+<main>
+    <h1>현황</h1>
+    <div class="tiles">
+        <div class="tile"><div class="label">관리 중인 PC</div><div class="value" th:text="${pcStatuses.size()}">0</div></div>
+        <div class="tile"><div class="label">확인이 필요한 PC</div>
+            <div class="value" th:text="${problemPcCount}" th:style="${problemPcCount > 0} ? 'color:var(--bad)'">0</div></div>
+        <div class="tile"><div class="label">사용 중인 허용 매체</div><div class="value" th:text="${activeDeviceCount}">0</div></div>
+        <div class="tile"><div class="label">마지막 정기 점검</div>
+            <div class="value" style="font-size:18px" th:text="${lastReview == null} ? '없음' : ${#temporals.format(lastReview.reviewedAt, 'yyyy-MM-dd')}">-</div>
+            <div th:if="${reviewDue}"><a class="badge bad" th:href="@{/reviews/new}" th:text="${reviewCycleDays} + '일 넘음 · 점검하기'">점검 필요</a></div>
+        </div>
+    </div>
+
+    <h2>PC 적용 현황</h2>
+    <div class="table-wrap">
+        <table>
+            <tr><th>PC</th><th>상태</th><th>마지막 연결</th><th>사용자</th></tr>
+            <tr th:if="${pcStatuses.isEmpty()}"><td colspan="4">아직 연결된 PC가 없습니다. 각 PC에 감시 프로그램을 설치하세요. (설정 화면 참고)</td></tr>
+            <tr th:each="s : ${pcStatuses}">
+                <td th:text="${s.pc.name}"></td>
+                <td><span class="badge" th:classappend="${s.level}" th:text="${s.status}"></span></td>
+                <td th:text="${s.pc.lastSeenAt == null} ? '' : ${#temporals.format(s.pc.lastSeenAt, 'yyyy-MM-dd HH:mm')}"></td>
+                <td th:text="${s.pc.lastUser}"></td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>최근 차단</h2>
+    <div class="table-wrap">
+        <table>
+            <tr><th>시간</th><th>PC</th><th>사용자</th><th>매체</th><th></th></tr>
+            <tr th:if="${recentBlocked.isEmpty()}"><td colspan="5">차단 기록이 없습니다.</td></tr>
+            <tr th:each="e : ${recentBlocked}">
+                <td th:text="${#temporals.format(e.occurredAt, 'MM-dd HH:mm')}"></td>
+                <td th:text="${e.pcName}"></td>
+                <td th:text="${e.userName}"></td>
+                <td th:text="${e.kind} + ' - ' + ${e.deviceName}"></td>
+                <td><a class="btn small sub" th:href="@{/devices/new(eventId=${e.id})}">허용 등록</a></td>
+            </tr>
+        </table>
+    </div>
+
+    <th:block th:unless="${expiringSoon.isEmpty()}">
+        <h2>30일 안에 만료되는 매체</h2>
+        <div class="table-wrap">
+            <table>
+                <tr><th>관리번호</th><th>매체</th><th>사용자</th><th>만료일</th></tr>
+                <tr th:each="d : ${expiringSoon}">
+                    <td><a th:href="@{/devices/{id}/edit(id=${d.id})}" th:text="${d.id}"></a></td>
+                    <td th:text="${d.deviceName}"></td>
+                    <td th:text="${d.owner}"></td>
+                    <td th:text="${d.expiresOn}"></td>
+                </tr>
+            </table>
+        </div>
+    </th:block>
+</main>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('사용 기록')}"></head>
+<body>
+<div th:replace="~{fragments :: top('events')}"></div>
+<main>
+    <h1>USB 사용 기록</h1>
+    <form method="get" th:action="@{/events}" class="toolbar">
+        <div><label>시작일</label><input type="date" name="from" th:value="${from}"></div>
+        <div><label>종료일</label><input type="date" name="to" th:value="${to}"></div>
+        <div><label>PC</label>
+            <select name="pc"><option value="">전체</option>
+                <option th:each="n : ${pcNames}" th:value="${n}" th:text="${n}" th:selected="${n == pc}"></option></select></div>
+        <div><label>구분</label>
+            <select name="type">
+                <option value="" th:selected="${type == ''}">전체</option>
+                <option value="차단" th:selected="${type == '차단'}">차단만</option>
+                <option value="허용" th:selected="${type == '허용'}">허용만</option>
+                <option value="기타" th:selected="${type == '기타'}">프로그램 설치/제거</option>
+            </select></div>
+        <button type="submit">조회</button>
+        <a class="btn sub" th:href="@{/events/export(from=${from},to=${to},pc=${pc},type=${type})}">엑셀 내려받기</a>
+    </form>
+    <p class="hint">
+        <span th:text="${total}">0</span>건
+        <span th:if="${total > maxRows}" th:text="'(화면에는 최근 ' + ${maxRows} + '건만 보입니다. 전체는 엑셀로 내려받으세요)'"></span>
+    </p>
+    <div class="table-wrap">
+        <table>
+            <tr><th>시간</th><th>PC</th><th>사용자</th><th>동작</th><th>매체</th><th>장치 ID</th><th></th></tr>
+            <tr th:if="${events.isEmpty()}"><td colspan="7">기록이 없습니다.</td></tr>
+            <tr th:each="e : ${events}">
+                <td th:text="${#temporals.format(e.occurredAt, 'yyyy-MM-dd HH:mm:ss')}" style="white-space:nowrap"></td>
+                <td th:text="${e.pcName}"></td>
+                <td th:text="${e.userName}"></td>
+                <td><span class="badge" th:classappend="${e.blocked} ? 'bad' : (${e.allowed} ? 'ok' : 'muted')" th:text="${e.action}"></span></td>
+                <td th:text="${e.kind} + ' - ' + ${e.deviceName}"></td>
+                <td class="id" th:text="${e.instanceId}"></td>
+                <td><a th:if="${e.blocked}" class="btn small sub" th:href="@{/devices/new(eventId=${e.id})}">허용 등록</a></td>
+            </tr>
+        </table>
+    </div>
+</main>
+</body>
+</html>

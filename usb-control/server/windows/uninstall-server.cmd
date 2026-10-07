@@ -1,8 +1,9 @@
 @echo off
-rem Double-click to open the USB control menu as administrator.
+rem Double-click to run uninstall-server.ps1 as administrator.
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
     exit /b
 )
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0menu.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall-server.ps1"
+pause

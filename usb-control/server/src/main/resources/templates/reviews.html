@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('정기 점검')}"></head>
+<body>
+<div th:replace="~{fragments :: top('reviews')}"></div>
+<main>
+    <h1>정기 점검 기록</h1>
+    <div class="toolbar">
+        <a class="btn" th:href="@{/reviews/new}">점검하기</a>
+        <a class="btn sub" th:href="@{/reviews/export}">엑셀 내려받기</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <tr><th>번호</th><th>점검일시</th><th>점검자</th><th>점검 기간</th><th>차단</th><th>허용</th><th>사용 중 매체</th><th>결과</th><th>내용</th></tr>
+            <tr th:if="${reviews.isEmpty()}"><td colspan="9">점검 기록이 없습니다. 한 달에 한 번 점검을 권장합니다.</td></tr>
+            <tr th:each="r : ${reviews}">
+                <td th:text="${r.id}"></td>
+                <td th:text="${#temporals.format(r.reviewedAt, 'yyyy-MM-dd HH:mm')}"></td>
+                <td th:text="${r.reviewer}"></td>
+                <td th:text="${r.periodFrom} + ' ~ ' + ${r.periodTo}" style="white-space:nowrap"></td>
+                <td th:text="${r.blockedCount}"></td>
+                <td th:text="${r.allowedCount}"></td>
+                <td th:text="${r.activeDeviceCount}"></td>
+                <td><span class="badge" th:classappend="${r.result == '조치 필요'} ? 'warn' : 'ok'" th:text="${r.result}"></span></td>
+                <td th:text="${r.memo}" style="white-space:pre-wrap"></td>
+            </tr>
+        </table>
+    </div>
+</main>
+</body>
+</html>

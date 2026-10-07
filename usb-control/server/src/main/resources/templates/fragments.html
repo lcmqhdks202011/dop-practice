@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' - USB 매체제어'">USB 매체제어</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+<div th:fragment="top(active)">
+    <header>
+        <div class="title">USB 매체제어</div>
+        <nav>
+            <a th:href="@{/}" th:classappend="${active == 'home'} ? 'on'">현황</a>
+            <a th:href="@{/devices}" th:classappend="${active == 'devices'} ? 'on'">허용 매체(관리대장)</a>
+            <a th:href="@{/events}" th:classappend="${active == 'events'} ? 'on'">사용 기록</a>
+            <a th:href="@{/pcs}" th:classappend="${active == 'pcs'} ? 'on'">PC 적용 현황</a>
+            <a th:href="@{/reviews}" th:classappend="${active == 'reviews'} ? 'on'">정기 점검</a>
+            <a th:href="@{/audit}" th:classappend="${active == 'audit'} ? 'on'">관리 이력</a>
+            <a th:href="@{/settings}" th:classappend="${active == 'settings'} ? 'on'">설정</a>
+        </nav>
+        <div class="me">
+            <span th:text="${currentAdmin}">admin</span>
+            <form th:action="@{/logout}" method="post" class="inline"><button type="submit">로그아웃</button></form>
+        </div>
+    </header>
+    <main style="padding-bottom:0">
+        <div class="msg warn" th:if="${passwordExpired}">
+            비밀번호를 <span th:text="${passwordMaxAgeDays}">90</span>일 넘게 바꾸지 않았습니다.
+            <a th:href="@{/settings}">설정</a>에서 바꿔 주세요.
+        </div>
+        <div class="msg ok" th:if="${message}" th:text="${message}"></div>
+        <div class="msg bad" th:if="${error}" th:text="${error}"></div>
+    </main>
+</div>
+</body>
+</html>

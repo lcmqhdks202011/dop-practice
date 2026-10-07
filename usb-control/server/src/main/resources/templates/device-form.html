@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${device == null} ? '매체 등록' : '매체 수정')}"></head>
+<body>
+<div th:replace="~{fragments :: top('devices')}"></div>
+<main>
+    <h1 th:text="${device == null} ? '새 매체 등록' : '관리번호 ' + ${device.id} + ' (' + ${device.status} + ')'">매체</h1>
+
+    <div class="msg muted" th:if="${device != null and device.revoked}">
+        <span th:text="${#temporals.format(device.revokedAt, 'yyyy-MM-dd HH:mm')} + ' ' + ${device.revokedBy} + ' 회수 · 사유: ' + ${device.revokedReason}"></span>
+    </div>
+
+    <form class="card" method="post" th:object="${form}"
+          th:action="${device == null} ? @{/devices} : @{/devices/{id}(id=${device.id})}">
+        <div class="form-grid">
+            <div class="wide"><label>장치 ID *</label>
+                <input type="text" th:field="*{instanceId}">
+                <div class="hint">사용 기록의 [허용 등록]으로 들어오면 자동으로 채워집니다. 별표(*)를 쓰면 여러 장치를 한꺼번에 허용합니다(설치 단계 차단을 켜면 별표 줄은 막힙니다).</div>
+                <div class="field-error" th:errors="*{instanceId}"></div></div>
+            <div><label>매체명</label><input type="text" th:field="*{deviceName}"></div>
+            <div><label>종류</label>
+                <select th:field="*{kind}">
+                    <option value="USB저장장치">USB저장장치</option>
+                    <option value="휴대폰">휴대폰</option>
+                </select></div>
+            <div><label>사용자 *</label><input type="text" th:field="*{owner}">
+                <div class="field-error" th:errors="*{owner}"></div></div>
+            <div><label>부서</label><input type="text" th:field="*{department}"></div>
+            <div><label>사용 목적 *</label><input type="text" th:field="*{purpose}">
+                <div class="field-error" th:errors="*{purpose}"></div></div>
+            <div><label>승인자 *</label><input type="text" th:field="*{approver}">
+                <div class="field-error" th:errors="*{approver}"></div></div>
+            <div><label>적용 PC</label>
+                <select th:field="*{pcName}">
+                    <option value="">전체 PC</option>
+                    <option th:each="n : ${pcNames}" th:value="${n}" th:text="${n}"></option>
+                </select></div>
+            <div><label>만료일</label><input type="date" th:field="*{expiresOn}">
+                <div class="hint">비우면 만료 없음. 만료일 다음 날부터 자동으로 차단됩니다.</div></div>
+        </div>
+        <div style="margin-top:16px" th:if="${device == null or !device.revoked}">
+            <button type="submit" th:text="${device == null} ? '등록' : '저장'">저장</button>
+            <a class="btn sub" th:href="@{/devices}">취소</a>
+        </div>
+    </form>
+
+    <form class="card" method="post" th:if="${device != null and !device.revoked}"
+          th:action="@{/devices/{id}/revoke(id=${device.id})}"
+          onsubmit="return confirm('이 매체를 회수(사용 중지)할까요? 회수 후에는 다시 등록해야 합니다.')">
+        <h2 style="margin-top:0">회수 (사용 중지)</h2>
+        <div class="toolbar">
+            <div style="flex:1"><label>회수 사유 *</label><input type="text" name="reason" required placeholder="예: 퇴사, 분실, 사용 종료"></div>
+            <button type="submit" class="danger">회수</button>
+        </div>
+    </form>
+</main>
+</body>
+</html>

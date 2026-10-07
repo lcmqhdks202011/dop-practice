@@ -1,3 +1,2 @@
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
-allowlist.txt text eol=crlf
