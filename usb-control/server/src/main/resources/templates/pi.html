@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('개인정보 검출')}"></head>
+<body>
+<div th:replace="~{fragments :: top('pi')}"></div>
+<main>
+    <h1>개인정보 검출 (PC에 저장된 파일)</h1>
+    <div class="toolbar">
+        <form method="post" th:action="@{/pi/request-all}" style="margin:0"
+              onsubmit="return confirm('모든 PC에 지금 검사를 요청할까요? 검사하는 동안 PC가 조금 느려질 수 있습니다.')">
+            <button type="submit">모든 PC 지금 검사</button></form>
+        <a class="btn sub" th:href="@{/pi/export}">검출 결과 엑셀 내려받기</a>
+    </div>
+    <p class="hint">
+        각 PC의 사용자 폴더와 데이터 드라이브에 있는 txt, csv, xlsx, docx, pptx, hwpx 파일 안을 검사해
+        주민등록번호, 외국인등록번호, 여권번호, 운전면허번호, 카드번호, 계좌번호가 있거나
+        휴대폰번호·이메일이 <span th:text="${threshold}">5</span>개 이상인 파일을 찾습니다. 서버에는 건수만 오고 실제 번호는 오지 않습니다.<br>
+        <span th:if="${piScanDays > 0}" th:text="${piScanDays} + '일마다 자동으로 검사합니다.'"></span>
+        <span th:if="${piScanDays == 0}">정기 검사가 꺼져 있습니다.</span>
+        (<a th:href="@{/settings}">설정</a>에서 바꿀 수 있음) hwp, pdf, 예전 형식(xls, doc)은 내용을 읽지 못해 검사하지 않습니다.
+    </p>
+    <div class="msg warn" th:if="${unresolved > 0}" th:text="'조치하지 않은 개인정보 파일이 ' + ${unresolved} + '개 있습니다. PC를 눌러 파일마다 조치 결과를 남기세요.'"></div>
+    <div class="table-wrap">
+        <table>
+            <tr><th>PC</th><th>마지막 검사</th><th>검사한 파일</th><th>못 본 파일</th><th>개인정보 파일</th><th>미조치</th><th>상태</th><th></th></tr>
+            <tr th:if="${rows.isEmpty()}"><td colspan="8">아직 연결된 PC가 없습니다.</td></tr>
+            <tr th:each="r : ${rows}">
+                <td><a th:if="${r.scan != null}" th:href="@{/pi/scans/{id}(id=${r.scan.id})}" th:text="${r.pc.name}"></a>
+                    <span th:if="${r.scan == null}" th:text="${r.pc.name}"></span>
+                    <span th:if="${r.pc.privacyPc}" class="badge privacy">개인정보처리</span></td>
+                <td th:text="${r.scan == null} ? '검사 안 함' : ${#temporals.format(r.scan.finishedAt, 'yyyy-MM-dd HH:mm')} + ' (' + ${r.scan.scanTrigger} + ')'"></td>
+                <td th:text="${r.scan == null} ? '' : ${r.scan.scannedFiles}"></td>
+                <td th:text="${r.scan == null} ? '' : ${r.scan.skippedFiles}"></td>
+                <td><span th:if="${r.scan != null}" class="badge" th:classappend="${r.scan.detectedFiles > 0} ? 'warn' : 'ok'"
+                          th:text="${r.scan.detectedFiles} + (${r.scan.truncated} ? '+ (일부만)' : '')"></span></td>
+                <td><span th:if="${r.unresolved > 0}" class="badge bad" th:text="${r.unresolved}"></span></td>
+                <td><span th:if="${r.outdated}" class="badge warn" th:text="'PC 프로그램 ' + ${agentVersion} + ' 이상 필요'"></span>
+                    <span th:if="${r.requested and !r.outdated}" class="badge muted">검사 요청됨</span></td>
+                <td><form method="post" class="inline" th:action="@{/pi/pcs/{id}/request(id=${r.pc.id})}">
+                    <button type="submit" class="small sub">지금 검사</button></form></td>
+            </tr>
+        </table>
+    </div>
+</main>
+</body>
+</html>

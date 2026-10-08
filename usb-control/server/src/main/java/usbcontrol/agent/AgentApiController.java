@@ -12,6 +12,9 @@ import usbcontrol.domain.UsbEvent;
 import usbcontrol.domain.UsbEventRepository;
 import usbcontrol.service.InputPortService;
 import usbcontrol.service.InputPortService.InputDevice;
+import usbcontrol.service.PiService;
+import usbcontrol.service.PiService.CountsReport;
+import usbcontrol.service.PiService.ScanReport;
 import usbcontrol.service.PolicyService;
 import usbcontrol.service.PolicyService.AgentPolicy;
 import usbcontrol.service.SettingsService;
@@ -33,10 +36,11 @@ public class AgentApiController {
                                  String policyVersion, String os, List<InputDevice> inputDevices) {
     }
 
-    /** fileName, fileSize: 개인정보처리 PC에서 USB로 복사한 파일 (2.2.0 이상) */
+    /** fileName, fileSize: 개인정보처리 PC에서 USB로 복사한 파일 (2.2.0 이상)
+     *  piCounts: 그 파일에서 찾은 개인정보 건수, piNote: 검사하지 못한 이유 (2.4.0 이상) */
     public record EventItem(LocalDateTime occurredAt, String userName, String action,
                             String kind, String deviceName, String instanceId, String port,
-                            String fileName, Long fileSize) {
+                            String fileName, Long fileSize, CountsReport piCounts, String piNote) {
     }
 
     private static final int MAX_INPUT_DEVICES = 20;
@@ -52,14 +56,16 @@ public class AgentApiController {
     private final PcRepository pcs;
     private final UsbEventRepository events;
     private final InputPortService inputPorts;
+    private final PiService pi;
 
     public AgentApiController(SettingsService settings, PolicyService policies,
-                              PcRepository pcs, UsbEventRepository events, InputPortService inputPorts) {
+                              PcRepository pcs, UsbEventRepository events, InputPortService inputPorts, PiService pi) {
         this.settings = settings;
         this.policies = policies;
         this.pcs = pcs;
         this.events = events;
         this.inputPorts = inputPorts;
+        this.pi = pi;
     }
 
     /** 30초마다: PC 상태를 알리고, 최신 허용 목록과 설정을 받아 갑니다. */
@@ -103,10 +109,24 @@ public class AgentApiController {
                         cut(e.userName(), 255), cut(e.action(), 255), cut(e.kind(), 255),
                         cut(e.deviceName(), 255), cut(e.instanceId(), 500), cut(e.port(), 255))
                         .withFile(cut(e.fileName(), 1000), e.fileSize())
-                        .withPrivacyPc(pc.isPrivacyPc()))
+                        .withPrivacyPc(pc.isPrivacyPc())
+                        .withPi(e.piCounts() == null ? null : e.piCounts().toCounts(), e.piNote()))
                 .toList();
         events.saveAll(saved);
         return ResponseEntity.ok(new EventsResponse(saved.size()));
+    }
+
+    /** PC에 저장된 파일의 개인정보 검사 결과. 개인정보가 나온 파일과 건수만 받습니다 (실제 번호는 받지 않음). */
+    @PostMapping(path = "/pi-scan", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Transactional
+    public ResponseEntity<EventsResponse> piScan(@RequestHeader(name = KEY_HEADER, required = false) String key,
+                                                 @RequestBody ScanReport body) {
+        if (!validKey(key)) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (blank(body.pcName())) return ResponseEntity.badRequest().build();
+
+        LocalDateTime now = LocalDateTime.now();
+        Pc pc = findOrCreate(body.pcName(), now);
+        return ResponseEntity.ok(new EventsResponse((int) pi.save(pc.getName(), body, now).getDetectedFiles()));
     }
 
     private Pc findOrCreate(String name, LocalDateTime now) {

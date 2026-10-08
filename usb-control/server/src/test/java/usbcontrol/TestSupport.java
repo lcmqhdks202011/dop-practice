@@ -27,10 +27,14 @@ public abstract class TestSupport {
     @Autowired protected PasswordEncoder encoder;
 
     @Autowired protected DesignatedPortRepository designatedPortRepository;
+    @Autowired protected PiScanRepository piScans;
+    @Autowired protected PiFindingRepository piFindings;
 
     @BeforeEach
     void cleanDatabase() {
         designatedPortRepository.deleteAll();
+        piFindings.deleteAll();
+        piScans.deleteAll();
         devices.deleteAll();
         pcs.deleteAll();
         events.deleteAll();

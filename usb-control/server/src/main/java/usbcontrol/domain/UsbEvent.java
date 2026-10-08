@@ -29,7 +29,8 @@ public class UsbEvent {
     private String userName;
     /** 허용 / 차단 / 허용(차단 풀림) / 차단(이미 차단된 장치) / 프로그램 설치 / 프로그램 제거
      *  키보드·마우스: 빠짐 / 다시 연결 / 다른 장치로 바뀜 / 지정 외 포트에 연결 / 지정 외 포트에서 빠짐
-     *  개인정보처리 PC: 허용(읽기 전용) / 파일 반출 / 파일 반출 기록 누락 */
+     *  개인정보처리 PC: 허용(읽기 전용) / 파일 반출 / 파일 반출 기록 누락
+     *  모든 USB 장치: USB 연결 / USB 연결(설치 때 연결되어 있음) / USB 분리 */
     private String action;
     private String kind;
     private String deviceName;
@@ -44,6 +45,10 @@ public class UsbEvent {
     /** 기록을 받을 때 그 PC가 개인정보처리 PC였는지 */
     @Column(columnDefinition = "boolean default false not null")
     private boolean privacyPc;
+    /** 반출한 파일에서 찾은 개인정보 (예: 주민등록번호 3, 휴대폰번호 12) 또는 검사하지 못한 이유 */
+    private String piSummary;
+    @Column(columnDefinition = "boolean default false not null")
+    private boolean piDetected;
 
     protected UsbEvent() {
     }
@@ -74,17 +79,35 @@ public class UsbEvent {
         return action != null && action.startsWith("허용");
     }
 
+    /** 키보드·마우스 지정 포트 기록 */
     public boolean isInputDevice() {
-        return INPUT_KINDS.contains(kind);
+        return INPUT_KINDS.contains(kind) && !isUsbDevice();
+    }
+
+    /** 모든 USB 장치의 연결/분리 기록 (2.3.0 이상) */
+    public boolean isUsbDevice() {
+        return action != null && action.startsWith("USB ");
     }
 
     public boolean isFileExport() {
         return FILE_EXPORT.equals(action) || FILE_EXPORT_MISSED.equals(action);
     }
 
-    /** 빨간색으로 보여줄 기록: 차단, 키보드·마우스 빠짐/바뀜/지정 외 포트, 반출 기록 누락 */
+    /** 빨간색으로 보여줄 기록: 차단, 키보드·마우스 빠짐/바뀜/지정 외 포트, 반출 기록 누락, 개인정보가 든 파일 반출 */
     public boolean isAlert() {
-        return isBlocked() || (isInputDevice() && INPUT_ALERTS.contains(action)) || FILE_EXPORT_MISSED.equals(action);
+        return isBlocked() || (isInputDevice() && INPUT_ALERTS.contains(action)) || FILE_EXPORT_MISSED.equals(action)
+                || piDetected;
+    }
+
+    /** 반출한 파일의 개인정보 검사 결과. counts 가 없으면 note 는 검사하지 못한 이유 */
+    public UsbEvent withPi(PiCounts counts, String note) {
+        if (counts != null) {
+            this.piSummary = counts.summary();
+            this.piDetected = counts.isSignificant();
+        } else if (note != null && !note.isBlank()) {
+            this.piSummary = "검사 못 함: " + (note.length() > 200 ? note.substring(0, 200) : note);
+        }
+        return this;
     }
 
     public UsbEvent withFile(String fileName, Long fileSize) {
@@ -125,4 +148,6 @@ public class UsbEvent {
     public String getFileName() { return fileName; }
     public Long getFileSize() { return fileSize; }
     public boolean isPrivacyPc() { return privacyPc; }
+    public String getPiSummary() { return piSummary; }
+    public boolean isPiDetected() { return piDetected; }
 }

@@ -41,7 +41,7 @@ public record PcStatus(Pc pc, String status, String level, String currentVersion
     }
 
     /** '2.1.0' 처럼 점으로 나눈 버전 비교. 알 수 없는 버전은 오래된 것으로 봅니다. */
-    static boolean olderThan(String version, String minimum) {
+    public static boolean olderThan(String version, String minimum) {
         if (version == null || version.isBlank()) return true;
         String[] a = version.trim().split("\\."), b = minimum.split("\\.");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {

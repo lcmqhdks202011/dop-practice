@@ -34,7 +34,7 @@ if ($config) {
 }
 
 Remove-Item -Path (Join-Path $InstallDir 'UsbControl.ps1'), (Join-Path $InstallDir 'UsbControl.Common.ps1'),
-                  $ConfigPath, $PolicyCachePath, $QueuePath -ErrorAction SilentlyContinue
+                  $ConfigPath, $PolicyCachePath, $QueuePath, $UsbStatePath, $PiStatePath, $PiResultPath -ErrorAction SilentlyContinue
 
 Write-Host ''
 Write-Host '제거를 마쳤습니다. 이제 이 PC에서는 모든 USB를 쓸 수 있습니다.' -ForegroundColor Green

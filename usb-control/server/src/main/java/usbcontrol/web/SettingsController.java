@@ -74,6 +74,16 @@ public class SettingsController {
         return "redirect:/settings";
     }
 
+    @PostMapping("/pi-scan")
+    public String updatePiScan(@RequestParam(defaultValue = "0") int piScanDays, RedirectAttributes redirect) {
+        int before = settings.get().getPiScanDays();
+        settings.updatePiScanDays(piScanDays);
+        int after = settings.get().getPiScanDays();
+        audit.log("개인정보 검사 주기 변경", (before == 0 ? "끔" : before + "일") + " → " + (after == 0 ? "끔" : after + "일"));
+        redirect.addFlashAttribute("message", "저장했습니다. PC에는 30초 안에 반영됩니다.");
+        return "redirect:/settings";
+    }
+
     @PostMapping("/agent-key")
     public String regenerateKey(RedirectAttributes redirect) {
         settings.regenerateAgentKey();

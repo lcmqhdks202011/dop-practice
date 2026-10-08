@@ -19,6 +19,17 @@
         <button type="submit">저장</button>
     </form>
 
+    <form class="card" method="post" th:action="@{/settings/pi-scan}">
+        <h2 style="margin-top:0">개인정보 검출</h2>
+        <p class="hint" style="margin-top:0">각 PC에 저장된 파일에 개인정보가 들어 있는지 주기적으로 검사합니다. 결과는 <a th:href="@{/pi}">개인정보 검출</a> 화면에서 봅니다.
+            검사는 PC가 켜져 있을 때 낮은 우선순위로 돌아서 일하는 데 큰 지장은 없습니다.</p>
+        <div class="toolbar" style="margin:0">
+            <div><label>검사 주기 (일, 0이면 끔)</label>
+                <input type="number" name="piScanDays" min="0" max="365" th:value="${settings.piScanDays}" style="width:120px;padding:7px 9px;border:1px solid #c9ced6;border-radius:5px"></div>
+            <button type="submit">저장</button>
+        </div>
+    </form>
+
     <div class="card">
         <h2 style="margin-top:0">PC 프로그램 접속 키</h2>
         <p>각 PC에 감시 프로그램을 설치할 때 이 키를 입력합니다. 다른 사람에게 알려주지 마세요.</p>

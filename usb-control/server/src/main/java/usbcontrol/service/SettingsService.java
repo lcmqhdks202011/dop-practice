@@ -40,6 +40,11 @@ public class SettingsService {
         settings.setInstallBlock(installBlock);
     }
 
+    @Transactional
+    public void updatePiScanDays(int days) {
+        get().setPiScanDays(Math.max(0, Math.min(365, days)));
+    }
+
     private static String newKey() {
         byte[] bytes = new byte[24];
         RANDOM.nextBytes(bytes);

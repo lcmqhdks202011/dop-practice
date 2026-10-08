@@ -1,5 +1,6 @@
 package usbcontrol.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
@@ -20,6 +21,9 @@ public class Settings {
     private boolean notifyUser = true;
     /** 윈도우 장치 설치 정책으로도 막을지 (꽂는 순간부터 빈틈 없이 차단) */
     private boolean installBlock;
+    /** PC에 저장된 파일의 개인정보 검사 주기 (일). 0이면 정기 검사 안 함 */
+    @Column(columnDefinition = "integer default 7 not null")
+    private int piScanDays = 7;
 
     protected Settings() {
     }
@@ -36,4 +40,6 @@ public class Settings {
     public void setNotifyUser(boolean notifyUser) { this.notifyUser = notifyUser; }
     public boolean isInstallBlock() { return installBlock; }
     public void setInstallBlock(boolean installBlock) { this.installBlock = installBlock; }
+    public int getPiScanDays() { return piScanDays; }
+    public void setPiScanDays(int piScanDays) { this.piScanDays = piScanDays; }
 }

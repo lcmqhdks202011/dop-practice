@@ -1,8 +1,10 @@
 ﻿# USB 매체제어 감시 프로그램.
 # install.ps1 이 시스템 계정 예약 작업으로 등록해서, 컴퓨터가 켜질 때마다 화면 없이 자동으로 실행됩니다.
 #  - 2초마다: 꽂힌 USB를 확인해서 허용 목록에 없으면 '사용 안 함'으로 바꾸고 기록
+#  - 2초마다: 모든 USB 장치(키보드, 카메라, 프린터 등 포함)의 연결/분리를 기록
 #  - 2초마다: 지정 포트에 키보드·마우스가 그대로 있는지 확인해서, 빠지거나 바뀌거나 다른 포트에 꽂히면 기록
-#  - 개인정보처리 PC: 허용 USB도 읽기 전용으로 열고('쓰기 허용' 매체만 쓰기), USB로 복사한 파일을 기록
+#  - 개인정보처리 PC: 허용 USB도 읽기 전용으로 열고('쓰기 허용' 매체만 쓰기), USB로 복사한 파일과 그 안의 개인정보 건수를 기록
+#  - 정해진 주기(또는 관리자 요청)마다: PC에 저장된 파일의 개인정보를 낮은 우선순위로 검사해서 서버에 건수만 보냄
 #  - 30초마다: 서버에 기록을 보내고 최신 허용 목록과 설정을 받아 옴
 # 서버에 연결이 안 되면 마지막으로 받은 정책으로 계속 막고, 기록은 모아 두었다가 나중에 보냅니다.
 
@@ -33,6 +35,13 @@ $watched         = @{}   # 파일 반출을 지켜보는 USB: 장치 ID → @{ D
 $pendingFiles    = @{}   # 바뀐 파일 경로 → 마지막으로 바뀐 시각 (복사가 끝날 때까지 기다림)
 $loggedFiles     = @{}   # 이미 기록한 파일 경로 → @{ Size; Time } (같은 복사를 두 번 기록하지 않음)
 $missedReported  = @{}   # 드라이브 → '기록 누락'을 마지막으로 남긴 시각
+$usbDevices      = Read-UsbState   # 꽂혀 있는 USB 장치: 장치 ID → 이름, 종류, 포트 (처음 설치면 $null)
+$usbErrorShown   = $false
+$pendingScans    = @{}   # 개인정보 검사 중인 반출 파일: 경로 → @{ Device; Size }
+$piState         = Read-PiState
+$piRunning       = $null   # 진행 중인 전체 검사: @{ Trigger; Request }
+$piErrorShown    = $false
+$agentStartedAt  = Get-Date
 
 Write-ErrorLog "감시 시작 (버전 $AgentVersion, 정책 $($policy.version))"
 
@@ -46,6 +55,10 @@ function Update-Policy($NewPolicy) {
 function Invoke-Sync {
     try {
         Send-QueuedEvents $config
+        if (Test-Path $PiResultPath) {
+            Invoke-Server $config '/api/agent/pi-scan' ([IO.File]::ReadAllText($PiResultPath)) | Out-Null
+            Remove-Item -Path $PiResultPath
+        }
         $newPolicy = Invoke-Checkin $config $policy.version $inputDevices
         if ($newPolicy.version -ne $policy.version) {
             Update-Policy $newPolicy
@@ -194,10 +207,68 @@ function Invoke-FileCheck {
         $last = $loggedFiles[$path]
         if ($last -and $last.Size -eq $file.Length -and ($now - $last.Time).TotalMinutes -lt 10) { continue }
         $loggedFiles[$path] = @{ Size = $file.Length; Time = $now }
-        Add-UsbEvent '파일 반출' $device $path $file.Length
+        if ([UsbControlPi]::CanScan($path)) {
+            # 안에 개인정보가 있는지 따로 도는 스레드에서 검사한 뒤 기록합니다.
+            $pendingScans[$path] = @{ Device = $device; Size = $file.Length }
+            [UsbControlPi]::Enqueue($path)
+        } else {
+            Add-UsbEvent '파일 반출' $device $path $file.Length
+        }
+    }
+
+    foreach ($r in [UsbControlPi]::Drain()) {
+        $p = $pendingScans[$r.Path]
+        if (-not $p) { continue }
+        $pendingScans.Remove($r.Path)
+        if ($r.Note) {
+            Add-UsbEvent '파일 반출' $p.Device $r.Path $p.Size -PiNote $r.Note
+        } else {
+            Add-UsbEvent '파일 반출' $p.Device $r.Path $p.Size -PiCounts (ConvertTo-PiCounts $r.Counts)
+        }
     }
 
     if ($loggedFiles.Count -gt 5000) { $script:loggedFiles = @{} }
+}
+
+# PC에 저장된 파일의 개인정보 검사: 주기가 되었거나 관리자가 [지금 검사]를 누르면 시작하고, 끝나면 결과를 보낼 파일로 남깁니다.
+function Invoke-PiScan {
+    if ($script:piRunning -and [UsbControlPi]::Finished) {
+        $found = [UsbControlPi]::TakeFindings()
+        $report = [ordered]@{
+            pcName       = $env:COMPUTERNAME
+            trigger      = $script:piRunning.Trigger
+            startedAt    = [UsbControlPi]::StartedAt.ToString('s')
+            finishedAt   = [UsbControlPi]::FinishedAt.ToString('s')
+            scannedFiles = [UsbControlPi]::Scanned
+            skippedFiles = [UsbControlPi]::Skipped
+            truncated    = [UsbControlPi]::Truncated
+            findings     = @(foreach ($f in $found) {
+                [ordered]@{ path = $f.Path; size = $f.Size; modifiedAt = $f.Modified.ToString('s'); counts = (ConvertTo-PiCounts $f.Counts) }
+            })
+        }
+        [IO.File]::WriteAllText($PiResultPath, ($report | ConvertTo-Json -Depth 5 -Compress), (New-Object Text.UTF8Encoding $false))
+        $script:piState = @{ lastScanAt = $report.finishedAt; lastRequest = $script:piRunning.Request }
+        Save-PiState $script:piState
+        Write-ErrorLog "개인정보 검사 끝: 파일 $($report.scannedFiles)개 검사, $($found.Count)개에서 개인정보 발견"
+        $script:piRunning = $null
+    }
+    if ($script:piRunning -or [UsbControlPi]::FullScanRunning) { return }
+
+    $request   = [string]$policy.piScanRequest
+    $requested = $request -and $request -ne $piState.lastRequest
+    $due = $false
+    if ($policy.piScanDays -gt 0) {
+        $last = [datetime]::MinValue
+        [void][datetime]::TryParse($piState.lastScanAt, [ref]$last)
+        $due = ((Get-Date) - $last).TotalDays -ge $policy.piScanDays
+    }
+    # 켜자마자는 PC가 바쁘므로 정기 검사는 프로그램이 시작하고 10분 뒤부터 합니다. (요청은 바로)
+    if (-not $requested -and (-not $due -or ((Get-Date) - $agentStartedAt).TotalMinutes -lt 10)) { return }
+
+    if ([UsbControlPi]::StartFullScan([string[]](Get-PiScanRoots))) {
+        $script:piRunning = @{ Trigger = $(if ($requested) { '요청' } else { '정기' }); Request = $request }
+        Write-ErrorLog "개인정보 검사 시작 ($($script:piRunning.Trigger))"
+    }
 }
 
 function Find-WatchedDevice([string]$Root) {
@@ -256,6 +327,33 @@ function Invoke-InputCheck {
     $script:extraInputs = $extra
 }
 
+# 모든 USB 장치의 연결/분리 기록. 껐다 켜는 동안 바뀐 것도 저장해 둔 목록과 비교해서 남깁니다.
+function Invoke-UsbLog {
+    $first = $null -eq $script:usbDevices
+    $before = if ($first) { @{} } else { $script:usbDevices }
+    $now = @{}
+    $changed = $first
+    foreach ($id in Get-UsbDeviceIds) {
+        if ($before.ContainsKey($id)) {
+            $now[$id] = $before[$id]
+            continue
+        }
+        $d = Get-UsbDeviceInfo $id
+        $now[$id] = $d
+        $changed = $true
+        # 프로그램을 처음 설치했을 때는 이미 꽂혀 있던 장치를 따로 표시합니다.
+        Add-UsbEvent $(if ($first) { 'USB 연결(설치 때 연결되어 있음)' } else { 'USB 연결' }) $d
+    }
+    foreach ($id in $before.Keys) {
+        if (-not $now.ContainsKey($id)) {
+            Add-UsbEvent 'USB 분리' $before[$id]
+            $changed = $true
+        }
+    }
+    $script:usbDevices = $now
+    if ($changed) { Save-UsbState $now }
+}
+
 function Send-BlockedMessage($Device) {
     Send-UserMessage "허용되지 않은 $($Device.Kind)를 차단했습니다.`n$($Device.Name)`n`n사용하려면 관리자에게 등록을 요청하세요."
 }
@@ -282,9 +380,23 @@ while ($true) {
         Write-ErrorLog "확인 중 오류: $($_.Exception.Message)"
     }
     try {
+        Invoke-UsbLog
+        $usbErrorShown = $false
+    } catch {
+        if (-not $usbErrorShown) { Write-ErrorLog "USB 연결 기록 중 오류: $($_.Exception.Message)" }
+        $usbErrorShown = $true
+    }
+    try {
         Invoke-FileCheck
     } catch {
         Write-ErrorLog "파일 반출 확인 중 오류: $($_.Exception.Message)"
+    }
+    try {
+        Invoke-PiScan
+        $piErrorShown = $false
+    } catch {
+        if (-not $piErrorShown) { Write-ErrorLog "개인정보 검사 중 오류: $($_.Exception.Message)" }
+        $piErrorShown = $true
     }
     Start-Sleep -Seconds $CheckSeconds
 }

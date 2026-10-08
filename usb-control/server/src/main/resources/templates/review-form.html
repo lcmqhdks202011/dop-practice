@@ -41,8 +41,10 @@
             <li>허용 매체 중 퇴사자, 사용이 끝난 매체가 남아 있지 않은지</li>
             <li><a th:href="@{/pcs}" target="_blank">PC 적용 현황</a>에 연결이 끊긴 PC가 없는지, <a th:href="@{/events(from=${from},to=${to},type='기타')}" target="_blank">프로그램이 제거된 PC</a>가 없는지</li>
             <li><a th:href="@{/audit}" target="_blank">관리 이력</a>에 승인 없이 등록된 매체나 이상한 작업이 없는지</li>
+            <li><a th:href="@{/pi}" target="_blank">개인정보 검출</a>에서 조치하지 않은 개인정보 파일이 없는지, 오래 검사하지 못한 PC가 없는지</li>
             <th:block th:unless="${privacyPcs.isEmpty()}">
-                <li>개인정보처리 PC의 <a th:href="@{/events(from=${from},to=${to},type='반출',privacy=true)}" target="_blank">파일 반출 기록</a>이
+                <li>개인정보처리 PC의 <a th:href="@{/events(from=${from},to=${to},type='반출',privacy=true)}" target="_blank">파일 반출 기록</a>
+                    (특히 <a th:href="@{/events(from=${from},to=${to},type='개인정보')}" target="_blank">개인정보가 든 파일</a>)이
                     매체 등록 때 승인한 사용 목적과 맞는지 (승인 안 된 개인정보 파일이 나가지 않았는지)</li>
                 <li>개인정보처리 PC용 매체 중 사용이 끝났는데 회수하지 않은 것이 없는지, 처리자가 바뀐 PC가 없는지</li>
             </th:block>

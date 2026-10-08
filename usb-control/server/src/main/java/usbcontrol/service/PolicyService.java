@@ -21,10 +21,11 @@ import java.util.stream.Collectors;
 @Service
 public class PolicyService {
 
-    /** privacyPc: 개인정보처리 PC. 저장장치를 읽기 전용으로 열고(writable 에 있는 매체만 쓰기 가능) USB로 복사한 파일을 기록합니다. */
+    /** privacyPc: 개인정보처리 PC. 저장장치를 읽기 전용으로 열고(writable 에 있는 매체만 쓰기 가능) USB로 복사한 파일을 기록합니다.
+     *  piScanDays: 저장 파일 개인정보 검사 주기 (0이면 안 함), piScanRequest: 관리자가 [지금 검사]를 누른 때 (바뀌면 바로 검사) */
     public record AgentPolicy(String version, boolean blockPhones, boolean notifyUser,
                               boolean installBlock, List<String> allow, List<PortRule> ports,
-                              boolean privacyPc, List<String> writable) {
+                              boolean privacyPc, List<String> writable, int piScanDays, String piScanRequest) {
     }
 
     /** 키보드·마우스를 꽂아 두어야 하는 포트 */
@@ -47,7 +48,9 @@ public class PolicyService {
     @Transactional
     public AgentPolicy policyFor(String pcName) {
         LocalDate today = LocalDate.now();
-        boolean privacy = pcs.findByNameIgnoreCase(pcName).map(Pc::isPrivacyPc).orElse(false);
+        Pc pc = pcs.findByNameIgnoreCase(pcName).orElse(null);
+        boolean privacy = pc != null && pc.isPrivacyPc();
+        String piScanRequest = pc == null || pc.getPiScanRequestedAt() == null ? "" : pc.getPiScanRequestedAt().toString();
         List<AllowedDevice> active = devices.findByRevokedFalse().stream()
                 .filter(d -> d.isActive(today) && (privacy ? d.appliesToPrivacyPc(pcName) : d.appliesTo(pcName)))
                 .toList();
@@ -60,9 +63,10 @@ public class PolicyService {
         String version = hash(String.join("\n", allow)
                 + "|" + s.isBlockPhones() + "|" + s.isNotifyUser() + "|" + s.isInstallBlock()
                 + ports.stream().map(p -> "|" + p.kind() + "|" + p.port() + "|" + p.deviceId()).collect(Collectors.joining())
-                + (privacy ? "|privacy|" + String.join("\n", writable) : ""));
+                + (privacy ? "|privacy|" + String.join("\n", writable) : "")
+                + "|pi|" + s.getPiScanDays() + "|" + piScanRequest);
         return new AgentPolicy(version, s.isBlockPhones(), s.isNotifyUser(), s.isInstallBlock(), allow, ports,
-                privacy, writable);
+                privacy, writable, s.getPiScanDays(), piScanRequest);
     }
 
     private static List<String> idsOf(List<AllowedDevice> list) {

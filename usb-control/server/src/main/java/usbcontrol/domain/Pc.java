@@ -36,6 +36,8 @@ public class Pc {
     private String privacyHandler;
     private LocalDateTime privacySetAt;
     private String privacySetBy;
+    /** 관리자가 [지금 검사]를 누른 때. PC 프로그램이 이 값이 바뀌면 개인정보 검사를 시작합니다. */
+    private LocalDateTime piScanRequestedAt;
 
     protected Pc() {
     }
@@ -70,4 +72,6 @@ public class Pc {
     public void setPrivacySetAt(LocalDateTime privacySetAt) { this.privacySetAt = privacySetAt; }
     public String getPrivacySetBy() { return privacySetBy; }
     public void setPrivacySetBy(String privacySetBy) { this.privacySetBy = privacySetBy; }
+    public LocalDateTime getPiScanRequestedAt() { return piScanRequestedAt; }
+    public void setPiScanRequestedAt(LocalDateTime piScanRequestedAt) { this.piScanRequestedAt = piScanRequestedAt; }
 }

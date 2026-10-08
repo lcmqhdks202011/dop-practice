@@ -5,6 +5,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import usbcontrol.domain.*;
 import usbcontrol.service.InputPortService;
+import usbcontrol.service.PiService;
 import usbcontrol.service.PcStatus;
 import usbcontrol.service.PolicyService;
 
@@ -24,15 +25,17 @@ public class DashboardController {
     private final ReviewRepository reviews;
     private final PolicyService policies;
     private final InputPortService inputPorts;
+    private final PiService pi;
 
     public DashboardController(PcRepository pcs, UsbEventRepository events, AllowedDeviceRepository devices,
-                               ReviewRepository reviews, PolicyService policies, InputPortService inputPorts) {
+                               ReviewRepository reviews, PolicyService policies, InputPortService inputPorts, PiService pi) {
         this.pcs = pcs;
         this.events = events;
         this.devices = devices;
         this.reviews = reviews;
         this.policies = policies;
         this.inputPorts = inputPorts;
+        this.pi = pi;
     }
 
     @GetMapping("/")
@@ -58,6 +61,7 @@ public class DashboardController {
         model.addAttribute("recentBlocked", events.findTop10ByActionStartingWithOrderByOccurredAtDesc("차단"));
         model.addAttribute("recentInputAlerts",
                 events.findTop10ByKindInAndActionInOrderByOccurredAtDesc(UsbEvent.INPUT_KINDS, UsbEvent.INPUT_ALERTS));
+        model.addAttribute("piUnresolved", pi.unresolvedCount());
         model.addAttribute("privacyPcCount", pcStatuses.stream().filter(s -> s.pc().isPrivacyPc()).count());
         model.addAttribute("recentExports", events.findTop10ByPrivacyPcTrueAndActionInOrderByOccurredAtDesc(
                 List.of(UsbEvent.FILE_EXPORT, UsbEvent.FILE_EXPORT_MISSED)));

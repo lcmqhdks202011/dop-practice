@@ -10,6 +10,9 @@
         <div class="tile"><div class="label">확인이 필요한 PC</div>
             <div class="value" th:text="${problemPcCount}" th:style="${problemPcCount > 0} ? 'color:var(--bad)'">0</div></div>
         <div class="tile"><div class="label">개인정보처리 PC</div><div class="value" th:text="${privacyPcCount}">0</div></div>
+        <div class="tile"><div class="label">조치 안 한 개인정보 파일</div>
+            <div class="value" th:text="${piUnresolved}" th:style="${piUnresolved > 0} ? 'color:var(--bad)'">0</div>
+            <a th:href="@{/pi}">개인정보 검출 보기</a></div>
         <div class="tile"><div class="label">사용 중인 허용 매체</div><div class="value" th:text="${activeDeviceCount}">0</div></div>
         <div class="tile"><div class="label">마지막 정기 점검</div>
             <div class="value" style="font-size:18px" th:text="${lastReview == null} ? '없음' : ${#temporals.format(lastReview.reviewedAt, 'yyyy-MM-dd')}">-</div>
@@ -57,8 +60,9 @@
                     <td th:text="${e.pcName}"></td>
                     <td th:text="${e.userName}"></td>
                     <td th:text="${e.deviceName}"></td>
-                    <td><span th:if="${e.alert}" class="badge bad" th:text="${e.action}"></span>
-                        <span class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></span></td>
+                    <td><span th:if="${e.action == '파일 반출 기록 누락'}" class="badge bad" th:text="${e.action}"></span>
+                        <span class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></span>
+                        <span th:if="${e.piSummary}" class="badge" th:classappend="${e.piDetected} ? 'bad' : 'muted'" th:text="${e.piSummary}"></span></td>
                 </tr>
             </table>
         </div>

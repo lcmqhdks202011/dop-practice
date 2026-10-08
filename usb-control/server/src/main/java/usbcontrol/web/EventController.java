@@ -68,11 +68,11 @@ public class EventController {
         List<List<Object>> rows = search(from, to, pc, type, privacy).stream()
                 .map(e -> List.<Object>of(e.getOccurredAt(), nz(e.getPcName()), e.isPrivacyPc() ? "예" : "",
                         nz(e.getUserName()), nz(e.getAction()), nz(e.getKind()), nz(e.getDeviceName()), nz(e.getPort()),
-                        nz(e.getFileName()), nz(e.getFileSize()), nz(e.getInstanceId())))
+                        nz(e.getFileName()), nz(e.getFileSize()), nz(e.getPiSummary()), nz(e.getInstanceId())))
                 .toList();
         audit.log("사용 기록 내려받기", from + " ~ " + to + (privacy ? ", 개인정보처리 PC만" : "") + ", " + rows.size() + "건");
         Csv.write(response, "USB_사용기록_" + from + "_" + to + ".csv",
-                List.of("시간", "PC", "개인정보처리 PC", "사용자", "동작", "종류", "매체명", "포트", "파일", "파일 크기(바이트)", "장치ID"),
+                List.of("시간", "PC", "개인정보처리 PC", "사용자", "동작", "종류", "매체명", "포트", "파일", "파일 크기(바이트)", "개인정보", "장치ID"),
                 rows);
     }
 
@@ -86,7 +86,9 @@ public class EventController {
                     case "허용" -> e.isAllowed();
                     case "입력장치" -> e.isInputDevice();
                     case "반출" -> e.isFileExport();
-                    case "기타" -> !e.isBlocked() && !e.isAllowed() && !e.isInputDevice() && !e.isFileExport();
+                    case "USB" -> e.isUsbDevice();
+                    case "개인정보" -> e.isPiDetected();
+                    case "기타" -> !e.isBlocked() && !e.isAllowed() && !e.isInputDevice() && !e.isFileExport() && !e.isUsbDevice();
                     default -> true;
                 })
                 .toList();

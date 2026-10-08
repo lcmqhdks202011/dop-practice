@@ -142,4 +142,33 @@ class InputPortTest extends TestSupport {
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(csv).contains("\"포트\"").contains("\"허브 1 - 포트 5\"");
     }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void 모든_USB_장치_연결_기록은_따로_골라_보고_포트_기록과_섞이지_않는다() throws Exception {
+        createAdmin("admin", "Passw0rd!");
+        String body = """
+                {"pcName":"PC1","events":[
+                  {"occurredAt":"2026-10-07T09:00:00","userName":"u","action":"USB 연결","kind":"키보드, USB저장장치",
+                   "deviceName":"Rubber Ducky","instanceId":"USB\\\\VID_F000&PID_FF02\\\\1","port":"허브 1 - 포트 3"},
+                  {"occurredAt":"2026-10-07T09:01:00","userName":"u","action":"USB 분리","kind":"키보드",
+                   "deviceName":"USB Keyboard","instanceId":"USB\\\\VID_1A2C&PID_0E24\\\\5","port":"허브 1 - 포트 5"},
+                  {"occurredAt":"2026-10-07T09:02:00","userName":"u","action":"프로그램 설치","kind":"","deviceName":"감시 프로그램","instanceId":""}
+                ]}
+                """;
+        mvc.perform(post("/api/agent/events").header("X-Agent-Key", settings.get().getAgentKey())
+                        .contentType(MediaType.APPLICATION_JSON).content(body.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk());
+
+        UsbEvent unplugged = events.findAll().stream().filter(e -> "USB 분리".equals(e.getAction())).findFirst().orElseThrow();
+        assertThat(unplugged.isUsbDevice()).isTrue();
+        assertThat(unplugged.isInputDevice()).isFalse();
+        assertThat(unplugged.isAlert()).isFalse();
+
+        String usb = page("/events?from=2026-10-07&to=2026-10-07&type=USB");
+        assertThat(usb).contains("키보드, USB저장장치 - Rubber Ducky [허브 1 - 포트 3]").contains("USB 분리")
+                .doesNotContain("감시 프로그램");
+        assertThat(page("/events?from=2026-10-07&to=2026-10-07&type=입력장치")).doesNotContain("Rubber Ducky").doesNotContain("USB 분리");
+        assertThat(page("/events?from=2026-10-07&to=2026-10-07&type=기타")).contains("감시 프로그램").doesNotContain("Rubber Ducky");
+    }
 }

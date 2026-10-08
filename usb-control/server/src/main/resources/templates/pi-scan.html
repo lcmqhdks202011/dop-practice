@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${scan.pcName} + ' 개인정보 검출')}"></head>
+<body>
+<div th:replace="~{fragments :: top('pi')}"></div>
+<main>
+    <p><a th:href="@{/pi}">← 개인정보 검출</a></p>
+    <h1>
+        <span th:text="${scan.pcName}">PC</span> 개인정보 검출 결과
+        <span th:if="${pc != null and pc.privacyPc}" class="badge privacy">개인정보처리 PC</span>
+    </h1>
+    <p class="hint">
+        <span th:text="${#temporals.format(scan.startedAt, 'yyyy-MM-dd HH:mm')} + ' ~ ' + ${#temporals.format(scan.finishedAt, 'HH:mm')} + ' (' + ${scan.scanTrigger} + ' 검사)'"></span> ·
+        검사한 파일 <span th:text="${scan.scannedFiles}"></span>개 ·
+        암호가 걸렸거나 너무 커서 못 본 파일 <span th:text="${scan.skippedFiles}"></span>개 ·
+        개인정보 파일 <b th:text="${scan.detectedFiles}"></b>개
+        <span th:if="${scan.truncated}" class="badge warn">너무 많아 일부만 받음</span>
+    </p>
+    <div class="msg muted" th:unless="${latest}">이 PC의 예전 검사 결과입니다. 조치는 가장 최근 검사에 남기세요.</div>
+    <p class="hint">
+        파일마다 조치 결과를 남기세요. 개인정보가 필요 없으면 지우고, 필요하면 암호를 걸어 두는 것이 원칙입니다.
+        '업무상 보관 (승인)'과 '개인정보 아님'은 다음 검사에서 같은 파일이 또 나와도 그대로 이어집니다.
+    </p>
+    <div class="table-wrap">
+        <table>
+            <tr><th>파일</th><th>크기</th><th>수정일</th><th>찾은 개인정보</th><th>조치</th></tr>
+            <tr th:if="${findings.isEmpty()}"><td colspan="5">개인정보가 든 파일이 없습니다.</td></tr>
+            <tr th:each="f : ${findings}">
+                <td class="file" th:text="${f.path}"></td>
+                <td style="white-space:nowrap" th:text="${f.fileSize == null} ? '' : ${#numbers.formatDecimal(f.fileSize / 1024.0, 1, 'COMMA', 0, 'POINT')} + ' KB'"></td>
+                <td style="white-space:nowrap" th:text="${f.modifiedAt == null} ? '' : ${#temporals.format(f.modifiedAt, 'yyyy-MM-dd')}"></td>
+                <td th:text="${f.counts.summary()}"></td>
+                <td style="min-width:300px">
+                    <div th:if="${f.resolved}" class="hint" style="margin-bottom:4px"
+                         th:text="${#temporals.format(f.actionAt, 'yyyy-MM-dd')} + ' ' + ${f.actionBy}"></div>
+                    <form method="post" class="toolbar" style="margin:0" th:action="@{/pi/findings/{id}/action(id=${f.id})}">
+                        <select name="result" style="width:auto">
+                            <option value="" th:selected="${!f.resolved}">미조치</option>
+                            <option th:each="a : ${actions}" th:value="${a}" th:text="${a}" th:selected="${a == f.actionResult}"></option>
+                        </select>
+                        <input type="text" name="memo" th:value="${f.actionMemo}" placeholder="내용 (예: 승인자, 암호 설정)" style="flex:1;width:auto">
+                        <button type="submit" class="small sub">저장</button>
+                    </form>
+                </td>
+            </tr>
+        </table>
+    </div>
+</main>
+</body>
+</html>

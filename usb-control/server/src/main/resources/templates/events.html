@@ -18,6 +18,8 @@
                 <option value="허용" th:selected="${type == '허용'}">허용만</option>
                 <option value="입력장치" th:selected="${type == '입력장치'}">키보드·마우스 포트</option>
                 <option value="반출" th:selected="${type == '반출'}">파일 반출</option>
+                <option value="USB" th:selected="${type == 'USB'}">USB 장치 연결/분리</option>
+                <option value="개인정보" th:selected="${type == '개인정보'}">개인정보가 든 파일 반출</option>
                 <option value="기타" th:selected="${type == '기타'}">프로그램 설치/제거</option>
             </select></div>
         <label class="check" style="margin:0 0 8px"><input type="checkbox" name="privacy" value="true" th:checked="${privacy}"> 개인정보처리 PC만</label>
@@ -38,7 +40,8 @@
                 <td th:text="${e.userName}"></td>
                 <td><span class="badge" th:classappend="${e.alert} ? 'bad' : (${e.allowed} ? 'ok' : (${e.fileExport} ? 'warn' : 'muted'))" th:text="${e.action}"></span></td>
                 <td><span th:text="${e.kind} + ' - ' + ${e.deviceName} + (${#strings.isEmpty(e.port)} ? '' : ' [' + ${e.port} + ']')"></span>
-                    <div th:if="${e.fileName}" class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></div></td>
+                    <div th:if="${e.fileName}" class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></div>
+                    <span th:if="${e.piSummary}" class="badge" th:classappend="${e.piDetected} ? 'bad' : 'muted'" th:text="${e.piSummary}"></span></td>
                 <td class="id" th:text="${e.instanceId}"></td>
                 <td><a th:if="${e.blocked}" class="btn small sub" th:href="@{/devices/new(eventId=${e.id})}">허용 등록</a></td>
             </tr>
