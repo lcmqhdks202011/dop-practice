@@ -5,6 +5,7 @@
 #  - 2초마다: 지정 포트에 키보드·마우스가 그대로 있는지 확인해서, 빠지거나 바뀌거나 다른 포트에 꽂히면 기록
 #  - 개인정보처리 PC: 허용 USB도 읽기 전용으로 열고('쓰기 허용' 매체만 쓰기), USB로 복사한 파일과 그 안의 개인정보 건수를 기록
 #  - 정해진 주기(또는 관리자 요청)마다: PC에 저장된 파일의 개인정보를 낮은 우선순위로 검사해서 서버에 건수만 보냄
+#  - 2초마다: 작업표시줄 아이콘(UsbControlTray.exe)이 읽을 상태 파일을 남기고, 1분마다 로그인한 사용자 화면에 아이콘이 없으면 다시 띄움
 #  - 30초마다: 서버에 기록을 보내고 최신 허용 목록과 설정을 받아 옴
 # 서버에 연결이 안 되면 마지막으로 받은 정책으로 계속 막고, 기록은 모아 두었다가 나중에 보냅니다.
 
@@ -42,6 +43,12 @@ $piState         = Read-PiState
 $piRunning       = $null   # 진행 중인 전체 검사: @{ Trigger; Request }
 $piErrorShown    = $false
 $agentStartedAt  = Get-Date
+$lastSyncOkAt    = $null   # 서버에 마지막으로 연결된 때
+$deviceStates    = @()     # 지금 꽂혀 있는 저장장치·휴대폰과 허용/차단 상태 (작업표시줄 아이콘에 보여줌)
+$lastStatusJson  = ''
+$lastStatusWrite = [datetime]::MinValue
+$lastTrayCheck   = [datetime]::MinValue
+$trayStarted     = @{}     # 사용자 → 아이콘을 마지막으로 띄워 준 때
 
 Write-ErrorLog "감시 시작 (버전 $AgentVersion, 정책 $($policy.version))"
 
@@ -66,6 +73,7 @@ function Invoke-Sync {
         }
         if ($script:lastSyncFailed) { Write-ErrorLog '서버 연결 복구' }
         $script:lastSyncFailed = $false
+        $script:lastSyncOkAt = Get-Date
     } catch {
         if (-not $script:lastSyncFailed) { Write-ErrorLog "서버 연결 실패 (복구될 때까지 저장된 정책으로 차단): $($_.Exception.Message)" }
         $script:lastSyncFailed = $true
@@ -75,12 +83,17 @@ function Invoke-Sync {
 function Invoke-DeviceCheck {
     $present = @{}
     $usable  = @()   # 지금 쓸 수 있게 열어 둔 허용 장치
+    $states  = @()
     foreach ($d in Get-ControlledDevices -IncludePhones:$policy.blockPhones) {
         $id = $d.InstanceId
         $present[$id] = $true
         $isNew   = -not $known.ContainsKey($id)
         $allowed = Test-Allowed $id $policy.allow
         try {
+            $states += [pscustomobject]@{
+                name = $d.Name; kind = $d.Kind; id = $id
+                state = if (-not $allowed) { '차단' } elseif ($policy.privacyPc -and -not (Test-Allowed $id $policy.writable)) { '허용 (읽기 전용)' } else { '허용' }
+            }
             if ($allowed) {
                 $usable += $d
                 if ($d.Disabled) {
@@ -124,6 +137,7 @@ function Invoke-DeviceCheck {
         }
     }
     $script:known = $present
+    $script:deviceStates = $states
 
     try { Update-WriteProtect $usable } catch { Write-ErrorLog "읽기 전용 설정 실패: $($_.Exception.Message)" }
     try { Update-FileWatch $usable } catch { Write-ErrorLog "파일 반출 감시 설정 실패: $($_.Exception.Message)" }
@@ -354,7 +368,62 @@ function Invoke-UsbLog {
     if ($changed) { Save-UsbState $now }
 }
 
+# 작업표시줄 아이콘이 읽는 상태 파일. 바뀐 것이 있거나 10초가 지나면 새로 씁니다. (아이콘은 45초 넘게 안 바뀌면 '멈춤'으로 봄)
+function Write-Status {
+    $s = [ordered]@{
+        agentVersion  = $AgentVersion
+        pcName        = $env:COMPUTERNAME
+        serverOk      = (-not $lastSyncFailed) -and ($null -ne $lastSyncOkAt)
+        lastSyncAt    = if ($lastSyncOkAt) { $lastSyncOkAt.ToString('s') } else { '' }
+        policyVersion = $policy.version
+        allowCount    = @($policy.allow).Count
+        privacyPc     = [bool]$policy.privacyPc
+        readOnly      = [bool]$writeProtected
+        notify        = [bool]$policy.notifyUser
+        piScan        = [ordered]@{ running = [bool]$piRunning; lastScanAt = [string]$piState.lastScanAt }
+        devices       = @($deviceStates)
+        events        = @($RecentEvents)
+    }
+    $json = $s | ConvertTo-Json -Depth 4 -Compress
+    $now = Get-Date
+    if ($json -eq $script:lastStatusJson -and ($now - $script:lastStatusWrite).TotalSeconds -lt 10) { return }
+    $s.updatedAt = $now.ToString('s')
+    # 아이콘이 쓰다 만 파일을 읽지 않도록 다른 이름으로 쓴 뒤 바꿔 넣습니다.
+    $tmp = "$StatusPath.tmp"
+    [IO.File]::WriteAllText($tmp, ($s | ConvertTo-Json -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
+    Move-Item -Path $tmp -Destination $StatusPath -Force
+    $script:lastStatusJson = $json
+    $script:lastStatusWrite = $now
+}
+
+# 로그인한 사용자 화면(원격 데스크톱 포함)마다 작업표시줄 아이콘이 떠 있게 합니다. 사용자가 꺼도 다시 띄웁니다.
+function Start-TrayForSessions {
+    if (-not (Test-Path $TrayExe)) { return }
+    $sessions = @{}
+    foreach ($p in Get-Process -Name UsbControlTray -ErrorAction SilentlyContinue) { $sessions[[int]$p.SessionId] = $true }
+    foreach ($e in Get-CimInstance -ClassName Win32_Process -Filter "Name='explorer.exe'") {
+        $session = [int]$e.SessionId
+        if ($sessions.ContainsKey($session)) { continue }
+        $sessions[$session] = $true
+        $owner = Invoke-CimMethod -InputObject $e -MethodName GetOwner
+        if ($owner.ReturnValue -ne 0 -or -not $owner.User) { continue }
+        $user = "$($owner.Domain)\$($owner.User)"
+        # 바로 꺼지는 경우 계속 띄우지 않도록 사용자마다 5분에 한 번만
+        if ($trayStarted.ContainsKey($user) -and ((Get-Date) - $trayStarted[$user]).TotalMinutes -lt 5) { continue }
+        $trayStarted[$user] = Get-Date
+        # 시스템 계정은 사용자 화면에 직접 띄울 수 없어 그 사용자로 실행되는 예약 작업을 씁니다.
+        $name = 'Tray-' + ($user -replace '[^\w.-]', '_')
+        $action = New-ScheduledTaskAction -Execute $TrayExe
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName $name -TaskPath '\UsbControl\' -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+        Start-ScheduledTask -TaskName $name -TaskPath '\UsbControl\'
+    }
+}
+
 function Send-BlockedMessage($Device) {
+    # 작업표시줄 아이콘이 떠 있으면 아이콘이 알림을 띄웁니다.
+    if (Get-Process -Name UsbControlTray -ErrorAction SilentlyContinue) { return }
     Send-UserMessage "허용되지 않은 $($Device.Kind)를 차단했습니다.`n$($Device.Name)`n`n사용하려면 관리자에게 등록을 요청하세요."
 }
 
@@ -397,6 +466,15 @@ while ($true) {
     } catch {
         if (-not $piErrorShown) { Write-ErrorLog "개인정보 검사 중 오류: $($_.Exception.Message)" }
         $piErrorShown = $true
+    }
+    try {
+        Write-Status
+        if (((Get-Date) - $lastTrayCheck).TotalSeconds -ge 60) {
+            $lastTrayCheck = Get-Date
+            Start-TrayForSessions
+        }
+    } catch {
+        Write-ErrorLog "작업표시줄 아이콘 처리 중 오류: $($_.Exception.Message)"
     }
     Start-Sleep -Seconds $CheckSeconds
 }

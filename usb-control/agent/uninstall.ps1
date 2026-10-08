@@ -12,6 +12,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 
 Remove-InstallBlock
+Remove-Tray
 Set-WriteProtect $false   # 개인정보처리 PC의 읽기 전용 해제
 
 foreach ($d in Get-AllControlledDevices -IncludePhones) {
@@ -34,7 +35,8 @@ if ($config) {
 }
 
 Remove-Item -Path (Join-Path $InstallDir 'UsbControl.ps1'), (Join-Path $InstallDir 'UsbControl.Common.ps1'),
-                  $ConfigPath, $PolicyCachePath, $QueuePath, $UsbStatePath, $PiStatePath, $PiResultPath -ErrorAction SilentlyContinue
+                  $ConfigPath, $PolicyCachePath, $QueuePath, $UsbStatePath, $PiStatePath, $PiResultPath,
+                  (Join-Path $InstallDir 'UsbControlTray.cs') -ErrorAction SilentlyContinue
 
 Write-Host ''
 Write-Host '제거를 마쳤습니다. 이제 이 PC에서는 모든 USB를 쓸 수 있습니다.' -ForegroundColor Green

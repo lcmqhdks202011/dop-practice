@@ -1,6 +1,6 @@
 ﻿# 여러 스크립트가 같이 쓰는 설정과 함수입니다. 다른 스크립트에서 점(.)으로 불러서 씁니다.
 
-$AgentVersion    = '2.4.0'
+$AgentVersion    = '2.5.0'
 $InstallDir      = Join-Path $env:ProgramData 'UsbControl'
 $ConfigPath      = Join-Path $InstallDir 'config.json'     # 서버 주소와 접속 키 (관리자만 읽기 가능)
 $PolicyCachePath = Join-Path $InstallDir 'policy.json'     # 서버에서 마지막으로 받은 정책 (서버가 꺼져도 이걸로 차단)
@@ -8,6 +8,12 @@ $QueuePath       = Join-Path $InstallDir 'queue.jsonl'     # 아직 서버로 �
 $UsbStatePath    = Join-Path $InstallDir 'usb-devices.json' # 마지막으로 확인한 USB 장치 목록 (껐다 켜는 동안 바뀐 것도 기록)
 $PiStatePath     = Join-Path $InstallDir 'pi-state.json'    # 개인정보 검사를 마지막으로 한 때
 $PiResultPath    = Join-Path $InstallDir 'pi-result.json'   # 아직 서버로 못 보낸 개인정보 검사 결과 (건수만, 실제 번호 없음)
+$StatusPath      = Join-Path $InstallDir 'status.json'      # 작업표시줄 아이콘이 읽는 지금 상태 (사용자도 읽기 가능)
+$TrayExe         = Join-Path $InstallDir 'UsbControlTray.exe'
+$RunKey          = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+
+$RecentEvents    = New-Object System.Collections.ArrayList   # 작업표시줄 아이콘에 보여줄 최근 기록
+$LastEventSeq    = [long]0
 $LogDir          = Join-Path $InstallDir 'logs'
 $LogPath         = Join-Path $LogDir 'usb-log.csv'         # 이 PC 기록 사본
 $ErrorLogPath    = Join-Path $LogDir 'error.log'
@@ -686,6 +692,15 @@ public static class UsbControlPi {
 # 서버 PiCounts 와 같은 순서
 $PiKeys = 'rrn', 'foreigner', 'passport', 'driver', 'card', 'phone', 'email', 'account'
 
+# 개인정보 파일로 볼 만큼이면 '주민등록번호 3, 휴대폰번호 12' 처럼, 아니면 빈 문자열 (서버 PiCounts 와 같은 기준)
+function Format-PiSummary($PiCounts) {
+    if (-not $PiCounts) { return '' }
+    $c = @($PiKeys | ForEach-Object { [int]$PiCounts[$_] })
+    if (($c[0] + $c[1] + $c[2] + $c[3] + $c[4] + $c[7]) -eq 0 -and ($c[5] + $c[6]) -lt 5) { return '' }
+    $names = '주민등록번호', '외국인등록번호', '여권번호', '운전면허번호', '카드번호', '휴대폰번호', '이메일', '계좌번호'
+    (@(for ($i = 0; $i -lt 8; $i++) { if ($c[$i] -gt 0) { "$($names[$i]) $($c[$i])" } }) -join ', ')
+}
+
 function ConvertTo-PiCounts([int[]]$Counts) {
     $o = [ordered]@{}
     for ($i = 0; $i -lt $PiKeys.Count; $i++) { $o[$PiKeys[$i]] = $Counts[$i] }
@@ -984,6 +999,14 @@ function Add-UsbEvent([string]$Action, $Device, [string]$FileName = '', $FileSiz
     }
     Add-Content -Path $QueuePath -Value ($item | ConvertTo-Json -Depth 3 -Compress) -Encoding UTF8
 
+    # 작업표시줄 아이콘이 새 기록을 알아보도록 늘 커지는 번호를 붙여 최근 20개만 둡니다.
+    $script:LastEventSeq = [Math]::Max($script:LastEventSeq + 1, [DateTime]::UtcNow.Ticks)
+    [void]$script:RecentEvents.Add([pscustomobject]@{
+        seq = $script:LastEventSeq; time = $now.ToString('s'); action = $Action; kind = $item.kind
+        name = $item.deviceName; file = $FileName; pi = (Format-PiSummary $PiCounts)
+    })
+    while ($script:RecentEvents.Count -gt 20) { $script:RecentEvents.RemoveAt(0) }
+
     # 이 PC에도 사본을 남깁니다.
     [pscustomobject]@{
         시간   = $now.ToString('yyyy-MM-dd HH:mm:ss')
@@ -1018,6 +1041,26 @@ function Send-QueuedEvents($Config) {
         }
     }
     Remove-Item -Path $QueuePath
+}
+
+# ---------------------------------------------------------------- 작업표시줄 아이콘
+
+# UsbControlTray.cs 를 이 PC에서 컴파일해 설치하고, 사용자가 로그인할 때마다 뜨게 합니다.
+function Install-Tray([string]$SourceDir) {
+    Get-Process -Name UsbControlTray -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+    $source = Get-Content -Path (Join-Path $SourceDir 'UsbControlTray.cs') -Raw -Encoding UTF8
+    Add-Type -TypeDefinition $source -OutputAssembly $TrayExe -OutputType WindowsApplication `
+        -ReferencedAssemblies 'System.Windows.Forms', 'System.Drawing', 'System.Web.Extensions'
+    Set-ItemProperty -Path $RunKey -Name 'UsbControlTray' -Value "`"$TrayExe`""
+}
+
+function Remove-Tray {
+    Remove-ItemProperty -Path $RunKey -Name 'UsbControlTray' -ErrorAction SilentlyContinue
+    Get-ScheduledTask -TaskPath '\UsbControl\' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
+    Get-Process -Name UsbControlTray -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+    Remove-Item -Path $TrayExe, $StatusPath -ErrorAction SilentlyContinue
 }
 
 # ---------------------------------------------------------------- 기타

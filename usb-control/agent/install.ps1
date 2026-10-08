@@ -49,7 +49,7 @@ New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 #   S-1-5-18 = 시스템 계정, S-1-5-32-544 = 관리자 그룹, S-1-5-32-545 = 사용자 그룹
 & icacls $InstallDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
 
-Copy-Item -Path (Join-Path $PSScriptRoot 'UsbControl.ps1'), (Join-Path $PSScriptRoot 'UsbControl.Common.ps1') -Destination $InstallDir -Force
+Copy-Item -Path (Join-Path $PSScriptRoot 'UsbControl.ps1'), (Join-Path $PSScriptRoot 'UsbControl.Common.ps1'), (Join-Path $PSScriptRoot 'UsbControlTray.cs') -Destination $InstallDir -Force
 Save-Config $Server $Key
 
 # 설치 기록을 남기고 바로 보냅니다.
@@ -66,6 +66,14 @@ $settings   = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero
                 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+
+# 작업표시줄 아이콘 (실패해도 USB 차단은 그대로 동작하므로 설치는 계속합니다)
+try {
+    Install-Tray $InstallDir
+} catch {
+    Write-Host "작업표시줄 아이콘을 만들지 못했습니다: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
 Start-ScheduledTask -TaskName $TaskName
 
 Write-Host ''

@@ -33,6 +33,7 @@
       <Component><File Source="$(var.AgentDir)\UsbControl.Common.ps1" /></Component>
       <Component><File Source="$(var.AgentDir)\install.ps1" /></Component>
       <Component><File Source="$(var.AgentDir)\uninstall.ps1" /></Component>
+      <Component><File Source="$(var.AgentDir)\UsbControlTray.cs" /></Component>
     </ComponentGroup>
 
     <Feature Id="Main">
