@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  직원 PC 감시 프로그램 설치 파일 (MSI). build.ps1 로 만듭니다.
+  파일을 Program Files\UsbControl 에 풀고 install.ps1 을 시스템 계정으로 실행합니다. (설정, 자동 실행 등록은 install.ps1 이 함)
+  창 없이 설치: msiexec /i UsbControlAgent-x.y.z.msi /qn SERVER=192.168.0.10:8080 KEY=접속키
+  새 버전으로 올릴 때는 SERVER, KEY 를 비워 두면 기존 설정을 그대로 씁니다.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="USB 매체제어 PC 프로그램" Manufacturer="USB 매체제어" Version="$(var.Version)"
+           UpgradeCode="6B1C9E0A-3F0D-4C1A-9C3E-2E4F7B8A5D11" Language="1042" Codepage="949" Scope="perMachine">
+    <SummaryInformation Description="USB 매체제어 PC 프로그램" Codepage="949" />
+    <MajorUpgrade DowngradeErrorMessage="더 새 버전이 이미 설치되어 있습니다." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="SERVER" Secure="yes" />
+    <Property Id="KEY" Secure="yes" Hidden="yes" />
+    <!-- 이미 설치된 PC면 서버 주소와 키를 다시 묻지 않습니다. -->
+    <Property Id="EXISTINGCONFIG">
+      <DirectorySearch Id="ExistingConfigDir" Path="[CommonAppDataFolder]UsbControl" Depth="0">
+        <FileSearch Name="config.json" />
+      </DirectorySearch>
+    </Property>
+    <Property Id="RunInstall" Hidden="yes" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="UsbControl" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="AgentFiles" Directory="INSTALLFOLDER">
+      <Component><File Source="$(var.AgentDir)\UsbControl.ps1" /></Component>
+      <Component><File Source="$(var.AgentDir)\UsbControl.Common.ps1" /></Component>
+      <Component><File Source="$(var.AgentDir)\install.ps1" /></Component>
+      <Component><File Source="$(var.AgentDir)\uninstall.ps1" /></Component>
+    </ComponentGroup>
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="AgentFiles" />
+    </Feature>
+
+    <!-- 설치: 서버 연결을 확인하고 자동 실행을 등록. 서버에 연결할 수 없으면 설치를 되돌립니다. -->
+    <SetProperty Id="RunInstall" Sequence="execute" Before="RunInstall" Condition="NOT REMOVE"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot; -Server &quot;[SERVER]&quot; -Key &quot;[KEY]&quot;" />
+    <CustomAction Id="RunInstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+
+    <!-- 제거: 막아 둔 장치를 풀고 서버에 제거 기록을 남깁니다. 새 버전으로 올릴 때는 하지 않습니다. -->
+    <SetProperty Id="RunUninstall" Sequence="execute" Before="RunUninstall" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;" />
+    <CustomAction Id="RunUninstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RunInstall" After="InstallFiles" Condition="NOT REMOVE" />
+      <Custom Action="RunUninstall" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
+    <!-- 창 없이(/qn) 설치하는데 서버 주소도 기존 설정도 없으면 멈춥니다. -->
+    <Launch Condition="Installed OR EXISTINGCONFIG OR (SERVER AND KEY) OR UILevel &gt; 3"
+            Message="서버 주소와 접속 키가 필요합니다. 예: msiexec /i 이파일.msi /qn SERVER=192.168.0.10:8080 KEY=접속키" />
+
+    <UI Id="AgentUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+
+      <Dialog Id="ServerDlg" Width="370" Height="270" Title="!(loc.WelcomeDlg_Title)">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}관리 서버 연결" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="관리 화면 &gt; 설정에 있는 서버 주소와 접속 키를 넣으세요." />
+        <Control Id="ServerLabel" Type="Text" X="20" Y="60" Width="330" Height="12" NoPrefix="yes" Text="관리 서버 주소 (예: 192.168.0.10:8080)" />
+        <Control Id="ServerEdit" Type="Edit" X="20" Y="74" Width="330" Height="18" Property="SERVER" />
+        <Control Id="KeyLabel" Type="Text" X="20" Y="102" Width="330" Height="12" NoPrefix="yes" Text="접속 키" />
+        <Control Id="KeyEdit" Type="Edit" X="20" Y="116" Width="330" Height="18" Property="KEY" />
+        <Control Id="Hint" Type="Text" X="20" Y="146" Width="330" Height="60" NoPrefix="yes"
+                 Text="설치할 때 서버에 연결해 봅니다. 연결할 수 없으면 설치를 되돌립니다.&#13;&#10;이미 설치된 PC를 새 버전으로 올릴 때는 비워 두면 기존 설정을 그대로 씁니다.&#13;&#10;설치하는 순간부터 허용 목록에 없는 USB 저장장치는 막힙니다." />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="WelcomeDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="SpawnDialog" Value="ServerMissingDlg" Condition="NOT EXISTINGCONFIG AND (NOT SERVER OR NOT KEY)" />
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" Condition="EXISTINGCONFIG OR (SERVER AND KEY)" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="ServerMissingDlg" Width="260" Height="85" Title="!(loc.WelcomeDlg_Title)" NoMinimize="yes">
+        <Control Id="Text" Type="Text" X="15" Y="15" Width="230" Height="30" NoPrefix="yes" Text="서버 주소와 접속 키를 모두 넣으세요." />
+        <Control Id="OK" Type="PushButton" X="102" Y="57" Width="56" Height="17" Default="yes" Cancel="yes" Text="!(loc.WixUIOK)">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="ServerDlg" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ServerDlg" Order="1" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Package>
+</Wix>

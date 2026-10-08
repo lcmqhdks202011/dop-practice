@@ -1,10 +1,15 @@
 ﻿#Requires -RunAsAdministrator
 # 서버 PC에 관리 서버 설치: 파일 복사 → 폴더 잠금 → 컴퓨터 켤 때 자동 실행 → 방화벽 포트 열기 → 시작
-# 이 폴더에 usb-control-server.jar 가 같이 있어야 합니다. 자바 21 이상이 설치되어 있어야 합니다.
+# 이 폴더에 usb-control-server.jar 가 같이 있어야 합니다.
+# 이 폴더에 runtime 폴더(같이 넣은 자바)가 있으면 그것을 쓰고, 없으면 설치된 자바 21 이상을 찾습니다.
+#   -InPlace: 이 폴더가 곧 설치 폴더 (MSI 설치 파일이 이렇게 부릅니다). 파일을 복사하지 않습니다.
+#   -Quiet:   창 없이 설치 (서버가 늦게 떠도 실패로 보지 않고, 브라우저를 열지 않음)
 
 param(
     [string]$InstallDir = 'C:\UsbControlServer',
-    [int]$Port = 8080
+    [int]$Port = 8080,
+    [switch]$InPlace,
+    [switch]$Quiet
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,9 +22,13 @@ if (-not (Test-Path $jar)) {
     exit 1
 }
 
-# 자바 찾기
+if ($InPlace) { $InstallDir = $PSScriptRoot }
+
+# 자바 찾기: 같이 넣은 자바 → JAVA_HOME → PATH
 $java = $null
-if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) { $java = Join-Path $env:JAVA_HOME 'bin\java.exe' }
+$bundled = Join-Path $PSScriptRoot 'runtime\bin\java.exe'
+if (Test-Path $bundled) { $java = Join-Path $InstallDir 'runtime\bin\java.exe' }
+if (-not $java -and $env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) { $java = Join-Path $env:JAVA_HOME 'bin\java.exe' }
 if (-not $java) { $java = (Get-Command java.exe -ErrorAction SilentlyContinue).Source }
 if (-not $java) {
     Write-Host '자바를 찾을 수 없습니다. 자바 21 이상(예: Eclipse Temurin 21)을 설치한 뒤 다시 실행하세요.' -ForegroundColor Red
@@ -43,7 +52,12 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-Copy-Item -Path $jar -Destination $InstallDir -Force
+if (-not $InPlace) {
+    Copy-Item -Path $jar -Destination $InstallDir -Force
+    if (Test-Path (Join-Path $PSScriptRoot 'runtime')) {
+        Copy-Item -Path (Join-Path $PSScriptRoot 'runtime') -Destination $InstallDir -Recurse -Force
+    }
+}
 # 데이터베이스와 백업이 들어가는 폴더이므로 시스템과 관리자만 접근
 & icacls $InstallDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 
@@ -69,6 +83,7 @@ for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
 }
 if (-not $ok) {
     Write-Host "서버가 2분 안에 뜨지 않았습니다. $InstallDir\logs\server.log 를 확인하세요." -ForegroundColor Red
+    if ($Quiet) { exit 0 }   # 자동 실행은 등록됐으므로 설치는 마칩니다
     exit 1
 }
 
@@ -83,4 +98,4 @@ $ips | ForEach-Object { Write-Host "             http://$_" }
 Write-Host "  데이터 폴더: $InstallDir\data, 백업 폴더: $InstallDir\backup"
 Write-Host ''
 Write-Host '네트워크가 "공용"으로 되어 있으면 다른 PC에서 접속이 안 됩니다. 윈도우 설정 > 네트워크에서 "개인"으로 바꾸세요.'
-Start-Process "http://localhost:$Port"
+if (-not $Quiet) { Start-Process "http://localhost:$Port" }

@@ -1,7 +1,7 @@
 ﻿#Requires -RunAsAdministrator
 # PC에 감시 프로그램 설치: 서버 연결 확인 → 파일 복사 → 폴더 잠금 → 컴퓨터 켤 때 자동 실행 등록 → 바로 시작
 #   예) .\install.ps1 -Server 192.168.0.10:8080 -Key 관리화면_설정에_있는_키
-#   값을 안 주면 물어봅니다.
+#   값을 안 주면 이미 설치된 설정을 그대로 쓰고, 그것도 없으면 물어봅니다. (MSI 설치 파일도 이 스크립트를 부릅니다)
 
 param(
     [string]$Server,
@@ -13,6 +13,10 @@ $ErrorActionPreference = 'Stop'
 
 $TaskName = 'UsbControl'
 
+# 새 버전으로 올릴 때는 기존 서버 주소와 키를 그대로 씁니다.
+$existing = Read-Config
+if (-not $Server -and $existing) { $Server = [string]$existing.serverUrl }
+if (-not $Key -and $existing)    { $Key    = [string]$existing.agentKey }
 if (-not $Server) { $Server = Read-Host '관리 서버 주소 (예: 192.168.0.10:8080)' }
 if (-not $Key)    { $Key    = Read-Host '접속 키 (관리 화면 > 설정에 있음)' }
 $Server = $Server.Trim()

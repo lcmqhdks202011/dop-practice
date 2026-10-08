@@ -11,39 +11,76 @@ ISMS 보조저장매체 관리 항목에서 요구하는 승인·관리대장·�
 
 | 폴더 | 내용 |
 |---|---|
-| `server/` | 관리 서버 (자바). 웹 관리 화면 + 데이터 저장 |
-| `server/windows/` | 서버 PC 설치 스크립트 |
-| `agent/` | 직원 PC에 설치하는 감시 프로그램 |
+| `server/` | 관리 서버 (자바). 웹 관리 화면 + 데이터 저장. 윈도우·리눅스 모두 됨 |
+| `server/windows/`, `server/linux/` | 서버 설치 스크립트 |
+| `agent/` | 직원 PC에 설치하는 감시 프로그램 (윈도우) |
+| `installer/` | 설치 파일(MSI, 리눅스 묶음)을 만드는 스크립트 |
+
+## 0. 설치 파일 만들기 (개발 PC에서, 새 버전을 낼 때마다)
+
+```
+powershell -ExecutionPolicy Bypass -File usb-control\installer\build.ps1
+```
+
+`installer\out` 에 아래 3개가 생깁니다. 필요한 도구(JDK 21 이상, Maven, WiX 5)는 `build.ps1` 맨 위에 적어 두었습니다.
+
+| 파일 | 쓰는 곳 |
+|---|---|
+| `UsbControlServer-<버전>.msi` | 관리 서버 - 윈도우 PC (자바 포함, 따로 설치할 필요 없음) |
+| `usb-control-server-<버전>-linux.tar.gz` | 관리 서버 - 리눅스 (Ubuntu/Debian, Rocky/RHEL 계열) |
+| `UsbControlAgent-<버전>.msi` | 직원 PC |
+
+설치된 PC를 새 버전으로 바꾸려면 버전을 올려서 만들어야 합니다. 서버는 `server/pom.xml` 의 `<version>`, PC 프로그램은 `agent/UsbControl.Common.ps1` 의 `$AgentVersion` 입니다.
 
 ## 1. 관리 서버 설치 (상시 켜 두는 PC 1대)
 
-1. **실행 파일 만들기** (개발 PC에서 한 번)
-   ```
-   cd usb-control/server
-   mvn package
-   ```
-   `target/usb-control-server.jar` 가 생깁니다. 이 파일을 `server/windows` 폴더에 복사합니다.
-2. **서버 PC에 자바 21 이상 설치** (예: Eclipse Temurin 21)
-3. `server/windows` 폴더를 서버 PC로 복사하고 `install-server.cmd` 를 더블클릭합니다.
-   - `C:\UsbControlServer` 에 설치되고, 컴퓨터가 켜지면 자동으로 실행됩니다.
-   - 방화벽에서 8080 포트를 사내망에만 엽니다.
-   - 끝나면 관리 화면 주소(예: `http://192.168.0.10:8080`)가 표시됩니다.
-4. 브라우저로 관리 화면에 들어가 **첫 관리자 계정**을 만듭니다.
-5. **설정** 화면에서 **PC 프로그램 접속 키**를 확인합니다. 직원 PC에 설치할 때 씁니다.
+윈도우와 리눅스 중 하나를 고릅니다.
 
-서버 PC의 IP가 바뀌면 직원 PC들이 연결하지 못하므로, 공유기에서 서버 PC의 IP를 고정해 두세요.
+**윈도우 PC**
+1. `UsbControlServer-<버전>.msi` 를 서버 PC에서 더블클릭합니다.
+   - `C:\UsbControlServer` 에 설치되고, 컴퓨터가 켜지면 자동으로 실행됩니다. 시작 메뉴에 'USB 매체제어 관리 화면'이 생깁니다.
+   - 방화벽에서 8080 포트를 사내망(개인/도메인 네트워크)에만 엽니다. 다른 포트는 `msiexec /i UsbControlServer-<버전>.msi PORT=9090`.
+   - 예전 스크립트(`install-server.cmd`)로 설치한 서버도 그대로 MSI로 올리면 됩니다. 데이터는 그대로 이어 씁니다.
+
+**리눅스 서버** (systemd 가 있는 Ubuntu 22.04 이상, Debian 13 이상, Rocky/AlmaLinux/RHEL 9 이상)
+```
+tar -xzf usb-control-server-<버전>-linux.tar.gz
+cd usb-control-server-<버전>-linux
+sudo ./install.sh                 # 다른 포트: sudo ./install.sh --port 9090
+```
+   - 자바 21이 없으면 같이 설치합니다. (Debian 12처럼 배포판에 자바 21이 없으면 Eclipse Temurin 21을 먼저 설치하세요.)
+   - `usb-control-server` 서비스로 등록되어 켜질 때 자동으로 실행되고, 전용 계정(`usbcontrol`)으로 돕니다.
+   - 프로그램은 `/opt/usb-control-server`, 데이터·백업·로그는 `/var/lib/usb-control-server` 에 있습니다.
+   - 방화벽(ufw 또는 firewalld)이 켜져 있으면 사내망(10.x, 172.16~31.x, 192.168.x)에서만 포트를 엽니다.
+   - 새 버전은 새 묶음을 풀어서 `install.sh` 를 다시 실행하면 됩니다. 상태 확인: `systemctl status usb-control-server`
+   - 윈도우 서버에서 옮겨 올 때: 윈도우에서 서버를 멈추고 `C:\UsbControlServer\data\usbcontrol.mv.db` 를
+     리눅스의 `/var/lib/usb-control-server/data/` 에 복사한 뒤 `sudo chown -R usbcontrol: /var/lib/usb-control-server` 하고
+     `sudo systemctl restart usb-control-server`. 직원 PC들의 서버 주소가 바뀌면 PC 프로그램을 새 주소로 다시 설치해야 합니다.
+
+설치가 끝나면
+1. 브라우저로 관리 화면(예: `http://192.168.0.10:8080`)에 들어가 **첫 관리자 계정**을 만듭니다.
+2. **설정** 화면에서 **PC 프로그램 접속 키**를 확인합니다. 직원 PC에 설치할 때 씁니다.
+
+서버의 IP가 바뀌면 직원 PC들이 연결하지 못하므로, 공유기에서 서버의 IP를 고정해 두세요.
 
 ## 2. 직원 PC에 감시 프로그램 설치 (PC마다)
 
-1. `agent` 폴더를 직원 PC로 복사합니다.
-2. `install.cmd` 를 더블클릭합니다. (관리자 권한 확인 창에서 '예')
-3. 서버 주소(예: `192.168.0.10:8080`)와 접속 키를 입력합니다.
-4. 1분 안에 관리 화면의 **PC 적용 현황**에 그 PC가 나타나면 완료입니다.
+1. `UsbControlAgent-<버전>.msi` 를 직원 PC에서 더블클릭합니다. (관리자 권한 확인 창에서 '예')
+2. 서버 주소(예: `192.168.0.10:8080`)와 접속 키를 입력합니다. 설치하면서 서버에 연결해 보고, 안 되면 설치를 되돌립니다.
+3. 1분 안에 관리 화면의 **PC 적용 현황**에 그 PC가 나타나면 완료입니다.
+
+여러 PC에 한꺼번에 깔 때는 창 없이 설치할 수 있습니다. (원격 관리 도구, 도메인 컴퓨터 시작 스크립트 등)
+```
+msiexec /i UsbControlAgent-<버전>.msi /qn SERVER=192.168.0.10:8080 KEY=접속키
+```
+제어판 '프로그램 추가/제거'에 'USB 매체제어 PC 프로그램'으로 나오고, 거기서 지울 수도 있습니다. (관리자만 가능)
+MSI 없이 `agent` 폴더를 복사해 `install.cmd` 를 더블클릭해도 똑같이 설치됩니다.
 
 설치하는 순간부터 **허용 목록에 없는 USB 저장장치와 휴대폰 파일 전송은 모두 막힙니다.**
 키보드, 마우스, 프린터 같은 저장장치가 아닌 USB 장치는 막지 않습니다. (키보드·마우스는 지정 포트를 정하면 빠짐/바뀜을 기록합니다. 3장 참고)
 
-이미 설치한 PC에 새 버전을 넣을 때도 같은 방법으로 `install.cmd` 를 다시 실행하면 됩니다.
+이미 설치한 PC에 새 버전을 넣을 때는 새 MSI를 실행하면 됩니다. 서버 주소와 키는 비워 두면 기존 설정을 그대로 씁니다.
+(`msiexec /i UsbControlAgent-<새버전>.msi /qn` 만으로도 됩니다)
 
 ## 3. 평소 사용
 
@@ -100,7 +137,7 @@ USB로 연결된 것만 확인합니다. 노트북 내장 키보드·터치패�
   읽기 전용과 쓰기 사이를 바꿀 때 프로그램이 USB를 잠깐 끊었다 다시 연결합니다.
 - 파일 반출은 USB 저장장치만 기록합니다. 휴대폰은 파일 이름을 알 수 없으므로 개인정보처리 PC에서는 휴대폰에 쓰기 허용을 주지 마세요.
 - 한꺼번에 아주 많은 파일을 복사하면 일부를 놓칠 수 있고, 이때는 '파일 반출 기록 누락'이 빨간색으로 남습니다.
-- PC 프로그램 2.2.0 이상이 필요합니다. 예전 버전이면 PC 적용 현황에 'PC 프로그램 업데이트 필요'가 빨간색으로 뜹니다. `install.cmd` 를 다시 실행하세요.
+- PC 프로그램 2.2.0 이상이 필요합니다. 예전 버전이면 PC 적용 현황에 'PC 프로그램 업데이트 필요'가 빨간색으로 뜹니다. 새 버전 MSI로 다시 설치하세요.
 
 ## 4. ISMS 심사 때 보여줄 것
 
@@ -139,7 +176,7 @@ USB로 연결된 것만 확인합니다. 노트북 내장 키보드·터치패�
 - 서버가 꺼져 있어도 직원 PC는 **마지막으로 받은 허용 목록으로 계속 막고**, 기록은 모아 두었다가 서버가 켜지면 보냅니다.
   서버에 한 번도 연결하지 못한 PC는 모든 USB를 막습니다.
 - 서버와 PC는 사내망에서 암호화하지 않은 HTTP로 통신합니다. 사내망 밖으로 서버를 열지 마세요.
-- 서버 PC가 고장 나면 백업도 같이 사라지므로 `C:\UsbControlServer\backup` 폴더를 가끔 다른 저장소에 복사해 두세요.
+- 서버 PC가 고장 나면 백업도 같이 사라지므로 백업 폴더(윈도우 `C:\UsbControlServer\backup`, 리눅스 `/var/lib/usb-control-server/backup`)를 가끔 다른 저장소에 복사해 두세요.
 - 직원 PC의 감시 프로그램은 실제 윈도우 PC에서 한 번 시험해 본 뒤 전체에 까세요.
   특히 개인정보처리 PC는 지정한 뒤 ① 허용 USB에 파일을 저장하면 막히는지 ② 쓰기 허용 매체에 복사하면 사용 기록에 '파일 반출'이 남는지 확인하세요.
 - 개인정보처리 PC의 읽기 전용은 윈도우 '이동식 저장소 액세스' 정책(쓰기 권한 거부)을 씁니다.
@@ -147,5 +184,7 @@ USB로 연결된 것만 확인합니다. 노트북 내장 키보드·터치패�
 
 ## 7. 제거
 
-- 직원 PC: `agent/uninstall.cmd` (막아 둔 장치와 개인정보처리 PC의 읽기 전용도 다시 풀림. 서버에 제거 기록이 남음)
-- 서버 PC: `server/windows/uninstall-server.cmd` (데이터는 남음)
+- 직원 PC: 제어판 '프로그램 추가/제거'에서 'USB 매체제어 PC 프로그램' 제거, 또는 `agent/uninstall.cmd`
+  (막아 둔 장치와 개인정보처리 PC의 읽기 전용도 다시 풀림. 서버에 제거 기록이 남음)
+- 서버 (윈도우): '프로그램 추가/제거'에서 'USB 매체제어 관리 서버' 제거, 또는 `server/windows/uninstall-server.cmd` (데이터는 남음)
+- 서버 (리눅스): `sudo /opt/usb-control-server/uninstall.sh` (데이터는 남음)
