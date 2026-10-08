@@ -9,6 +9,7 @@
         <div class="tile"><div class="label">관리 중인 PC</div><div class="value" th:text="${pcStatuses.size()}">0</div></div>
         <div class="tile"><div class="label">확인이 필요한 PC</div>
             <div class="value" th:text="${problemPcCount}" th:style="${problemPcCount > 0} ? 'color:var(--bad)'">0</div></div>
+        <div class="tile"><div class="label">개인정보처리 PC</div><div class="value" th:text="${privacyPcCount}">0</div></div>
         <div class="tile"><div class="label">사용 중인 허용 매체</div><div class="value" th:text="${activeDeviceCount}">0</div></div>
         <div class="tile"><div class="label">마지막 정기 점검</div>
             <div class="value" style="font-size:18px" th:text="${lastReview == null} ? '없음' : ${#temporals.format(lastReview.reviewedAt, 'yyyy-MM-dd')}">-</div>
@@ -22,7 +23,8 @@
             <tr><th>PC</th><th>상태</th><th>마지막 연결</th><th>사용자</th></tr>
             <tr th:if="${pcStatuses.isEmpty()}"><td colspan="4">아직 연결된 PC가 없습니다. 각 PC에 감시 프로그램을 설치하세요. (설정 화면 참고)</td></tr>
             <tr th:each="s : ${pcStatuses}">
-                <td th:text="${s.pc.name}"></td>
+                <td><a th:href="@{/pcs/{id}(id=${s.pc.id})}" th:text="${s.pc.name}"></a>
+                    <span th:if="${s.pc.privacyPc}" class="badge privacy">개인정보처리</span></td>
                 <td><span class="badge" th:classappend="${s.level}" th:text="${s.status}"></span></td>
                 <td th:text="${s.pc.lastSeenAt == null} ? '' : ${#temporals.format(s.pc.lastSeenAt, 'yyyy-MM-dd HH:mm')}"></td>
                 <td th:text="${s.pc.lastUser}"></td>
@@ -44,6 +46,41 @@
             </tr>
         </table>
     </div>
+
+    <th:block th:unless="${recentExports.isEmpty()}">
+        <h2>최근 개인정보처리 PC 파일 반출</h2>
+        <div class="table-wrap">
+            <table>
+                <tr><th>시간</th><th>PC</th><th>사용자</th><th>매체</th><th>파일</th></tr>
+                <tr th:each="e : ${recentExports}">
+                    <td th:text="${#temporals.format(e.occurredAt, 'MM-dd HH:mm')}"></td>
+                    <td th:text="${e.pcName}"></td>
+                    <td th:text="${e.userName}"></td>
+                    <td th:text="${e.deviceName}"></td>
+                    <td><span th:if="${e.alert}" class="badge bad" th:text="${e.action}"></span>
+                        <span class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></span></td>
+                </tr>
+            </table>
+        </div>
+        <p class="hint"><a th:href="@{/events(type='반출',privacy=true)}">파일 반출 기록 모두 보기</a></p>
+    </th:block>
+
+    <th:block th:unless="${recentInputAlerts.isEmpty()}">
+        <h2>최근 키보드·마우스 포트 이상</h2>
+        <div class="table-wrap">
+            <table>
+                <tr><th>시간</th><th>PC</th><th>사용자</th><th>내용</th><th>장치</th><th>포트</th></tr>
+                <tr th:each="e : ${recentInputAlerts}">
+                    <td th:text="${#temporals.format(e.occurredAt, 'MM-dd HH:mm')}"></td>
+                    <td th:text="${e.pcName}"></td>
+                    <td th:text="${e.userName}"></td>
+                    <td><span class="badge bad" th:text="${e.kind} + ' ' + ${e.action}"></span></td>
+                    <td th:text="${e.deviceName}"></td>
+                    <td th:text="${e.port}"></td>
+                </tr>
+            </table>
+        </div>
+    </th:block>
 
     <th:block th:unless="${expiringSoon.isEmpty()}">
         <h2>30일 안에 만료되는 매체</h2>

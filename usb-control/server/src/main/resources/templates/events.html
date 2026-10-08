@@ -16,10 +16,13 @@
                 <option value="" th:selected="${type == ''}">전체</option>
                 <option value="차단" th:selected="${type == '차단'}">차단만</option>
                 <option value="허용" th:selected="${type == '허용'}">허용만</option>
+                <option value="입력장치" th:selected="${type == '입력장치'}">키보드·마우스 포트</option>
+                <option value="반출" th:selected="${type == '반출'}">파일 반출</option>
                 <option value="기타" th:selected="${type == '기타'}">프로그램 설치/제거</option>
             </select></div>
+        <label class="check" style="margin:0 0 8px"><input type="checkbox" name="privacy" value="true" th:checked="${privacy}"> 개인정보처리 PC만</label>
         <button type="submit">조회</button>
-        <a class="btn sub" th:href="@{/events/export(from=${from},to=${to},pc=${pc},type=${type})}">엑셀 내려받기</a>
+        <a class="btn sub" th:href="@{/events/export(from=${from},to=${to},pc=${pc},type=${type},privacy=${privacy})}">엑셀 내려받기</a>
     </form>
     <p class="hint">
         <span th:text="${total}">0</span>건
@@ -31,10 +34,11 @@
             <tr th:if="${events.isEmpty()}"><td colspan="7">기록이 없습니다.</td></tr>
             <tr th:each="e : ${events}">
                 <td th:text="${#temporals.format(e.occurredAt, 'yyyy-MM-dd HH:mm:ss')}" style="white-space:nowrap"></td>
-                <td th:text="${e.pcName}"></td>
+                <td><span th:text="${e.pcName}"></span> <span th:if="${e.privacyPc}" class="badge privacy">개인정보</span></td>
                 <td th:text="${e.userName}"></td>
-                <td><span class="badge" th:classappend="${e.blocked} ? 'bad' : (${e.allowed} ? 'ok' : 'muted')" th:text="${e.action}"></span></td>
-                <td th:text="${e.kind} + ' - ' + ${e.deviceName}"></td>
+                <td><span class="badge" th:classappend="${e.alert} ? 'bad' : (${e.allowed} ? 'ok' : (${e.fileExport} ? 'warn' : 'muted'))" th:text="${e.action}"></span></td>
+                <td><span th:text="${e.kind} + ' - ' + ${e.deviceName} + (${#strings.isEmpty(e.port)} ? '' : ' [' + ${e.port} + ']')"></span>
+                    <div th:if="${e.fileName}" class="file" th:text="${e.fileName} + (${e.fileSize == null} ? '' : ' (' + ${e.fileSizeText} + ')')"></div></td>
                 <td class="id" th:text="${e.instanceId}"></td>
                 <td><a th:if="${e.blocked}" class="btn small sub" th:href="@{/devices/new(eventId=${e.id})}">허용 등록</a></td>
             </tr>

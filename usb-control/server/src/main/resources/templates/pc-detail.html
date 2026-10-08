@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head(${s.pc.name})}"></head>
+<body>
+<div th:replace="~{fragments :: top('pcs')}"></div>
+<main>
+    <p><a th:href="@{/pcs}">← PC 적용 현황</a></p>
+    <h1>
+        <span th:text="${s.pc.name}">PC</span>
+        <span class="badge privacy" th:if="${s.pc.privacyPc}">개인정보처리 PC</span>
+        <span class="badge" th:classappend="${s.level}" th:text="${s.status}"></span>
+    </h1>
+    <p class="hint">
+        사용자 <span th:text="${s.pc.lastUser}"></span> ·
+        마지막 연결 <span th:text="${s.pc.lastSeenAt == null} ? '' : ${#temporals.format(s.pc.lastSeenAt, 'yyyy-MM-dd HH:mm:ss')}"></span> ·
+        프로그램 <span th:text="${s.pc.agentVersion}"></span>
+    </p>
+
+    <h2>개인정보처리 PC</h2>
+    <div class="card">
+        <p class="hint" style="margin-top:0">
+            개인정보처리 PC로 지정하면: ① <b>이 PC를 적용 PC로 골라 등록한 매체만</b> 열립니다(전체 PC용 매체, 별표(*) 줄은 안 열림).
+            ② USB 저장장치·휴대폰은 <b>읽기 전용</b>으로 열리고, 매체 등록 때 '쓰기 허용'을 체크한 매체만 쓸 수 있습니다.
+            ③ 허용 USB로 복사한 파일 이름과 크기가 <a th:href="@{/events(pc=${s.pc.name},type='반출')}">사용 기록</a>에 '파일 반출'로 남습니다.
+            ④ 이 PC용 매체는 만료일이 꼭 있어야 하고 <span th:text="${maxDays}">30</span>일을 넘길 수 없습니다.
+        </p>
+        <p th:if="${s.pc.privacyPc}">
+            처리자 <b th:text="${s.pc.privacyHandler}"></b> ·
+            <span th:text="${#temporals.format(s.pc.privacySetAt, 'yyyy-MM-dd HH:mm')} + ' ' + ${s.pc.privacySetBy} + ' 지정'"></span>
+        </p>
+        <form method="post" class="toolbar" style="margin:0" th:action="@{/pcs/{id}/privacy(id=${s.pc.id})}">
+            <input type="hidden" name="privacy" value="true">
+            <div style="flex:1;min-width:200px"><label>개인정보처리자 (이 PC를 쓰는 사람) *</label>
+                <input type="text" name="handler" th:value="${s.pc.privacyHandler}" placeholder="예: 인사팀 홍길동"></div>
+            <button type="submit" th:text="${s.pc.privacyPc} ? '처리자 변경' : '개인정보처리 PC로 지정'">지정</button>
+        </form>
+        <form th:if="${s.pc.privacyPc}" method="post" style="margin-top:10px" th:action="@{/pcs/{id}/privacy(id=${s.pc.id})}"
+              onsubmit="return confirm('개인정보처리 PC 지정을 해제할까요? 전체 PC용 매체가 다시 열리고 쓰기도 됩니다.')">
+            <input type="hidden" name="privacy" value="false">
+            <button type="submit" class="small danger">지정 해제</button>
+        </form>
+    </div>
+
+    <h3 style="font-size:14px">이 PC에서 열리는 허용 매체</h3>
+    <p class="hint" th:if="${s.pc.privacyPc and sharedDeviceCount > 0}"
+       th:text="'전체 PC용(또는 별표) 허용 매체 ' + ${sharedDeviceCount} + '개는 이 PC에서 열리지 않습니다. 이 PC에서도 써야 하면 적용 PC를 이 PC로 골라 따로 등록하세요.'"></p>
+    <div class="table-wrap">
+        <table>
+            <tr><th>관리번호</th><th>매체</th><th>사용자</th><th>사용 목적</th><th>만료일</th><th th:if="${s.pc.privacyPc}">쓰기</th></tr>
+            <tr th:if="${deviceRows.isEmpty()}"><td th:colspan="${s.pc.privacyPc} ? 6 : 5">이 PC에서 열리는 매체가 없습니다.</td></tr>
+            <tr th:each="r : ${deviceRows}">
+                <td><a th:href="@{/devices/{id}/edit(id=${r.device.id})}" th:text="${r.device.id}"></a></td>
+                <td><span th:text="${r.device.deviceName}"></span><div class="hint" th:text="${r.device.instanceId}"></div></td>
+                <td th:text="${r.device.owner}"></td>
+                <td th:text="${r.device.purpose}"></td>
+                <td><span th:text="${r.device.expiresOn == null} ? '없음' : ${r.device.expiresOn}"></span>
+                    <span th:if="${r.problem}" class="badge warn" th:text="${r.problem}"></span></td>
+                <td th:if="${s.pc.privacyPc}"><span class="badge" th:classappend="${r.device.writeAllowed} ? 'warn' : 'muted'"
+                          th:text="${r.device.writeAllowed} ? '쓰기 허용' : '읽기 전용'"></span></td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>키보드·마우스 지정 포트</h2>
+    <p class="hint">
+        지정한 포트에서 키보드·마우스가 빠지거나, 같은 포트에 다른 장치가 꽂히거나, 다른 포트에 키보드·마우스가 꽂히면
+        <a th:href="@{/events(pc=${s.pc.name},type='입력장치')}">사용 기록</a>에 남고 현황 화면에 빨간색으로 표시됩니다.
+        (중간에 몰래 끼우는 키 입력 기록 장치나, 키보드로 위장한 USB를 찾아내기 위한 것입니다.)
+    </p>
+    <div class="table-wrap">
+        <table>
+            <tr><th>종류</th><th>지정 포트</th><th>지정한 장치</th><th>지금 상태</th><th>지정</th><th></th></tr>
+            <tr th:if="${portViews.isEmpty()}"><td colspan="6">지정된 포트가 없습니다. 아래 '지금 꽂혀 있는 키보드·마우스'에서 지정하세요.</td></tr>
+            <tr th:each="v : ${portViews}">
+                <td th:text="${v.rule.kind}"></td>
+                <td th:text="${v.rule.portLabel}"></td>
+                <td th:text="${v.rule.deviceName}"></td>
+                <td>
+                    <span class="badge" th:classappend="${v.level}" th:text="${v.state}"></span>
+                    <div class="hint" th:if="${v.changed}" th:text="'지금: ' + ${v.current.name}"></div>
+                </td>
+                <td style="white-space:nowrap" th:text="${#temporals.format(v.rule.registeredAt, 'yyyy-MM-dd')} + ' ' + ${v.rule.registeredBy}"></td>
+                <td style="white-space:nowrap">
+                    <form th:if="${v.changed}" method="post" class="inline" th:action="@{/pcs/{id}/ports(id=${s.pc.id})}"
+                          onsubmit="return confirm('지금 꽂혀 있는 장치가 정상적인 장치인지 PC에서 직접 확인했나요?')">
+                        <input type="hidden" name="kind" th:value="${v.rule.kind}">
+                        <input type="hidden" name="port" th:value="${v.rule.port}">
+                        <button type="submit" class="small sub">지금 장치로 다시 지정</button></form>
+                    <form method="post" class="inline" th:action="@{/pcs/{id}/ports/{pid}/delete(id=${s.pc.id},pid=${v.rule.id})}"
+                          onsubmit="return confirm('이 포트 지정을 해제할까요?')">
+                        <button type="submit" class="small danger">해제</button></form>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>지금 꽂혀 있는 키보드·마우스</h2>
+    <div class="msg warn" th:unless="${reportsInputs}">
+        이 PC의 감시 프로그램이 예전 버전이라 키보드·마우스를 알려 오지 않습니다. 새 버전 agent 폴더로 install.cmd 를 다시 실행하세요.
+    </div>
+    <th:block th:if="${reportsInputs}">
+        <p class="hint">USB로 연결된 것만 보입니다. 노트북 내장 키보드·터치패드와 블루투스 장치는 확인하지 않습니다. 30초마다 새로 받아옵니다.</p>
+        <div class="table-wrap">
+            <table>
+                <tr><th>종류</th><th>장치</th><th>포트</th><th>장치 ID</th><th></th></tr>
+                <tr th:if="${deviceViews.isEmpty()}"><td colspan="5">USB 키보드·마우스가 없습니다.</td></tr>
+                <tr th:each="v : ${deviceViews}">
+                    <td th:text="${v.device.kind}"></td>
+                    <td th:text="${v.device.name}"></td>
+                    <td th:text="${v.device.portLabel}"></td>
+                    <td class="id" th:text="${v.device.deviceId}"></td>
+                    <td>
+                        <span th:if="${v.designated}" class="badge ok">지정됨</span>
+                        <form th:unless="${v.designated}" method="post" class="inline" th:action="@{/pcs/{id}/ports(id=${s.pc.id})}">
+                            <input type="hidden" name="kind" th:value="${v.device.kind}">
+                            <input type="hidden" name="port" th:value="${v.device.port}">
+                            <button type="submit" class="small sub">이 포트로 지정</button></form>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <form th:unless="${deviceViews.isEmpty()}" method="post" th:action="@{/pcs/{id}/ports/all(id=${s.pc.id})}" style="margin-top:12px"
+              onsubmit="return confirm('지금 꽂혀 있는 키보드·마우스의 포트를 모두 지정할까요? 직원 PC에 원래 쓰는 키보드·마우스만 꽂혀 있는지 먼저 확인하세요.')">
+            <button type="submit">지금 꽂혀 있는 포트를 모두 지정</button>
+        </form>
+    </th:block>
+</main>
+</body>
+</html>

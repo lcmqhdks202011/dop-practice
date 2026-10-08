@@ -12,6 +12,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 
 Remove-InstallBlock
+Set-WriteProtect $false   # 개인정보처리 PC의 읽기 전용 해제
 
 foreach ($d in Get-AllControlledDevices -IncludePhones) {
     if ($d.Absent) {

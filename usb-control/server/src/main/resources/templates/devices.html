@@ -27,7 +27,11 @@
                 <td th:text="${d.department}"></td>
                 <td th:text="${d.purpose}"></td>
                 <td th:text="${d.approver}"></td>
-                <td th:text="${d.pcName == null} ? '전체' : ${d.pcName}"></td>
+                <td><span th:text="${d.pcName == null} ? '전체' : ${d.pcName}"></span>
+                    <th:block th:if="${d.pcName != null and #lists.contains(privacyPcNames, d.pcName)}">
+                        <span class="badge privacy">개인정보처리</span>
+                        <span class="badge" th:classappend="${d.writeAllowed} ? 'warn' : 'muted'" th:text="${d.writeAllowed} ? '쓰기 허용' : '읽기 전용'"></span>
+                    </th:block></td>
                 <td th:text="${#temporals.format(d.registeredAt, 'yyyy-MM-dd')}"></td>
                 <td th:text="${d.expiresOn == null} ? '없음' : ${d.expiresOn}"></td>
                 <td><span class="badge" th:classappend="${d.status == '사용 중'} ? 'ok' : 'muted'" th:text="${d.status}"></span></td>

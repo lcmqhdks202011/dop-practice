@@ -4,6 +4,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import usbcontrol.domain.*;
+import usbcontrol.service.InputPortService;
 import usbcontrol.service.PcStatus;
 import usbcontrol.service.PolicyService;
 
@@ -22,14 +23,16 @@ public class DashboardController {
     private final AllowedDeviceRepository devices;
     private final ReviewRepository reviews;
     private final PolicyService policies;
+    private final InputPortService inputPorts;
 
     public DashboardController(PcRepository pcs, UsbEventRepository events, AllowedDeviceRepository devices,
-                               ReviewRepository reviews, PolicyService policies) {
+                               ReviewRepository reviews, PolicyService policies, InputPortService inputPorts) {
         this.pcs = pcs;
         this.events = events;
         this.devices = devices;
         this.reviews = reviews;
         this.policies = policies;
+        this.inputPorts = inputPorts;
     }
 
     @GetMapping("/")
@@ -38,7 +41,7 @@ public class DashboardController {
         LocalDate today = now.toLocalDate();
 
         List<PcStatus> pcStatuses = pcs.findAllByOrderByNameAsc().stream()
-                .map(pc -> PcStatus.of(pc, policies.policyFor(pc.getName()).version(), now))
+                .map(pc -> PcStatus.of(pc, policies.policyFor(pc.getName()).version(), inputPorts.check(pc), now))
                 .toList();
         List<AllowedDevice> active = devices.findByRevokedFalse().stream().filter(d -> d.isActive(today)).toList();
         List<AllowedDevice> expiringSoon = active.stream()
@@ -53,6 +56,11 @@ public class DashboardController {
         model.addAttribute("activeDeviceCount", active.size());
         model.addAttribute("expiringSoon", expiringSoon);
         model.addAttribute("recentBlocked", events.findTop10ByActionStartingWithOrderByOccurredAtDesc("차단"));
+        model.addAttribute("recentInputAlerts",
+                events.findTop10ByKindInAndActionInOrderByOccurredAtDesc(UsbEvent.INPUT_KINDS, UsbEvent.INPUT_ALERTS));
+        model.addAttribute("privacyPcCount", pcStatuses.stream().filter(s -> s.pc().isPrivacyPc()).count());
+        model.addAttribute("recentExports", events.findTop10ByPrivacyPcTrueAndActionInOrderByOccurredAtDesc(
+                List.of(UsbEvent.FILE_EXPORT, UsbEvent.FILE_EXPORT_MISSED)));
         model.addAttribute("lastReview", lastReview.orElse(null));
         model.addAttribute("reviewDue", reviewDue);
         model.addAttribute("reviewCycleDays", REVIEW_CYCLE_DAYS);

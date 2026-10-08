@@ -26,8 +26,11 @@ public abstract class TestSupport {
     @Autowired protected SettingsService settings;
     @Autowired protected PasswordEncoder encoder;
 
+    @Autowired protected DesignatedPortRepository designatedPortRepository;
+
     @BeforeEach
     void cleanDatabase() {
+        designatedPortRepository.deleteAll();
         devices.deleteAll();
         pcs.deleteAll();
         events.deleteAll();

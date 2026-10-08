@@ -43,6 +43,7 @@ public class DeviceController {
         model.addAttribute("devices", status.equals("전체") ? all
                 : all.stream().filter(d -> d.getStatus().equals(status)).toList());
         model.addAttribute("status", status);
+        model.addAttribute("privacyPcNames", privacyPcNames());
         return "devices";
     }
 
@@ -65,6 +66,7 @@ public class DeviceController {
     @Transactional
     public String create(@Valid @ModelAttribute("form") DeviceForm form, BindingResult result,
                          Authentication auth, Model model, RedirectAttributes redirect) {
+        checkPrivacyPc(form, result);
         if (result.hasErrors()) return showForm(form, null, model);
 
         AllowedDevice device = new AllowedDevice();
@@ -89,6 +91,7 @@ public class DeviceController {
                          Model model, RedirectAttributes redirect) {
         AllowedDevice device = devices.findById(id).orElseThrow();
         if (device.isRevoked()) return "redirect:/devices";
+        checkPrivacyPc(form, result);
         if (result.hasErrors()) return showForm(form, device, model);
 
         String before = DeviceForm.from(device).summary();
@@ -122,17 +125,21 @@ public class DeviceController {
     @GetMapping("/export")
     public void export(HttpServletResponse response) throws IOException {
         List<List<Object>> rows = new ArrayList<>();
+        List<String> privacyPcs = privacyPcNames();
         for (AllowedDevice d : devices.findAllByOrderByIdDesc()) {
+            boolean privacy = d.getPcName() != null && privacyPcs.stream().anyMatch(n -> n.equalsIgnoreCase(d.getPcName()));
             rows.add(List.of(d.getId(), nz(d.getDeviceName()), nz(d.getKind()), d.getInstanceId(), nz(d.getOwner()),
                     nz(d.getDepartment()), nz(d.getPurpose()), nz(d.getApprover()),
-                    d.getPcName() == null ? "전체" : d.getPcName(), d.getRegisteredAt(), nz(d.getRegisteredBy()),
+                    d.getPcName() == null ? "전체" : d.getPcName(), privacy ? "예" : "",
+                    !privacy ? "" : d.isWriteAllowed() ? "쓰기 허용" : "읽기 전용",
+                    d.getRegisteredAt(), nz(d.getRegisteredBy()),
                     d.getExpiresOn() == null ? "" : d.getExpiresOn(), d.getStatus(),
                     d.getRevokedAt() == null ? "" : d.getRevokedAt(), nz(d.getRevokedBy()), nz(d.getRevokedReason())));
         }
         audit.log("관리대장 내려받기", rows.size() + "건");
         Csv.write(response, "보조저장매체_관리대장_" + LocalDate.now() + ".csv",
                 List.of("관리번호", "매체명", "종류", "장치ID", "사용자", "부서", "사용 목적", "승인자", "적용 PC",
-                        "등록일시", "등록 관리자", "만료일", "상태", "회수일시", "회수 관리자", "회수 사유"),
+                        "개인정보처리 PC", "쓰기", "등록일시", "등록 관리자", "만료일", "상태", "회수일시", "회수 관리자", "회수 사유"),
                 rows);
     }
 
@@ -140,7 +147,40 @@ public class DeviceController {
         model.addAttribute("form", form);
         model.addAttribute("device", device);
         model.addAttribute("pcNames", pcs.findAllByOrderByNameAsc().stream().map(Pc::getName).toList());
+        model.addAttribute("privacyPcNames", privacyPcNames());
+        model.addAttribute("maxDays", Pc.PRIVACY_DEVICE_MAX_DAYS);
         return "device-form";
+    }
+
+    private List<String> privacyPcNames() {
+        return pcs.findAllByOrderByNameAsc().stream().filter(Pc::isPrivacyPc).map(Pc::getName).toList();
+    }
+
+    /** 개인정보처리 PC용 매체: 장치 하나씩, 만료일 필수, 사용 기간은 최대 PRIVACY_DEVICE_MAX_DAYS 일 */
+    private void checkPrivacyPc(DeviceForm form, BindingResult result) {
+        if (form.getPcName() == null || form.getPcName().isBlank()) {
+            if (form.isWriteAllowed()) {
+                result.rejectValue("writeAllowed", "privacy", "쓰기 허용은 개인정보처리 PC를 적용 PC로 고른 경우에만 씁니다.");
+            }
+            return;
+        }
+        boolean privacy = pcs.findByNameIgnoreCase(form.getPcName().trim()).map(Pc::isPrivacyPc).orElse(false);
+        if (!privacy) {
+            if (form.isWriteAllowed()) {
+                result.rejectValue("writeAllowed", "privacy", "일반 PC에서는 원래 쓰기가 됩니다. 개인정보처리 PC에만 체크하세요.");
+            }
+            return;
+        }
+        if (form.getInstanceId() != null && form.getInstanceId().contains("*")) {
+            result.rejectValue("instanceId", "privacy", "개인정보처리 PC에는 별표(*)로 여러 장치를 한꺼번에 허용할 수 없습니다.");
+        }
+        LocalDate today = LocalDate.now();
+        if (form.getExpiresOn() == null) {
+            result.rejectValue("expiresOn", "privacy", "개인정보처리 PC용 매체는 만료일을 꼭 넣어야 합니다.");
+        } else if (form.getExpiresOn().isAfter(today.plusDays(Pc.PRIVACY_DEVICE_MAX_DAYS))) {
+            result.rejectValue("expiresOn", "privacy", "개인정보처리 PC용 매체는 오늘부터 " + Pc.PRIVACY_DEVICE_MAX_DAYS
+                    + "일 안(" + today.plusDays(Pc.PRIVACY_DEVICE_MAX_DAYS) + "까지)으로 넣어야 합니다.");
+        }
     }
 
     private static Object nz(Object o) {

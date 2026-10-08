@@ -32,6 +32,7 @@ public class DeviceForm {
     private String pcName;
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate expiresOn;
+    private boolean writeAllowed;
 
     public static DeviceForm from(AllowedDevice d) {
         DeviceForm f = new DeviceForm();
@@ -44,6 +45,7 @@ public class DeviceForm {
         f.approver = d.getApprover();
         f.pcName = d.getPcName();
         f.expiresOn = d.getExpiresOn();
+        f.writeAllowed = d.isWriteAllowed();
         return f;
     }
 
@@ -57,6 +59,7 @@ public class DeviceForm {
         d.setApprover(trim(approver));
         d.setPcName(trim(pcName));
         d.setExpiresOn(expiresOn);
+        d.setWriteAllowed(writeAllowed);
     }
 
     /** 관리 이력에 남길 요약 */
@@ -64,7 +67,8 @@ public class DeviceForm {
         return "장치ID=" + instanceId + ", 매체명=" + nz(deviceName) + ", 사용자=" + nz(owner) + ", 부서=" + nz(department)
                 + ", 목적=" + nz(purpose) + ", 승인자=" + nz(approver)
                 + ", 적용PC=" + (pcName == null || pcName.isBlank() ? "전체" : pcName)
-                + ", 만료일=" + (expiresOn == null ? "없음" : expiresOn);
+                + ", 만료일=" + (expiresOn == null ? "없음" : expiresOn)
+                + (writeAllowed ? ", 개인정보처리PC 쓰기 허용" : "");
     }
 
     private static String trim(String s) {
@@ -93,4 +97,6 @@ public class DeviceForm {
     public void setPcName(String pcName) { this.pcName = pcName; }
     public LocalDate getExpiresOn() { return expiresOn; }
     public void setExpiresOn(LocalDate expiresOn) { this.expiresOn = expiresOn; }
+    public boolean isWriteAllowed() { return writeAllowed; }
+    public void setWriteAllowed(boolean writeAllowed) { this.writeAllowed = writeAllowed; }
 }

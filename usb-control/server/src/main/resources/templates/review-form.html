@@ -20,6 +20,20 @@
             <a th:href="@{/devices}" target="_blank">관리대장 보기</a></div>
     </div>
 
+    <th:block th:unless="${privacyPcs.isEmpty()}">
+        <h2>개인정보처리 PC (<span th:text="${privacyPcs.size()}">0</span>대)</h2>
+        <div class="tiles">
+            <div class="tile"><div class="label">기간 중 차단</div><div class="value" th:text="${counts.privacyBlocked}">0</div>
+                <a th:href="@{/events(from=${from},to=${to},type='차단',privacy=true)}" target="_blank">차단 기록 보기</a></div>
+            <div class="tile"><div class="label">기간 중 허용 매체 사용</div><div class="value" th:text="${counts.privacyAllowed}">0</div>
+                <a th:href="@{/events(from=${from},to=${to},type='허용',privacy=true)}" target="_blank">허용 기록 보기</a></div>
+            <div class="tile"><div class="label">기간 중 파일 반출</div>
+                <div class="value" th:text="${counts.privacyExported}" th:style="${counts.privacyExported > 0} ? 'color:var(--warn)'">0</div>
+                <div th:if="${counts.privacyExportMissed > 0}"><span class="badge bad" th:text="'기록 누락 ' + ${counts.privacyExportMissed} + '건'"></span></div>
+                <a th:href="@{/events(from=${from},to=${to},type='반출',privacy=true)}" target="_blank">반출 기록 보기</a></div>
+        </div>
+    </th:block>
+
     <div class="card">
         <h2 style="margin-top:0">점검할 것</h2>
         <ul>
@@ -27,6 +41,11 @@
             <li>허용 매체 중 퇴사자, 사용이 끝난 매체가 남아 있지 않은지</li>
             <li><a th:href="@{/pcs}" target="_blank">PC 적용 현황</a>에 연결이 끊긴 PC가 없는지, <a th:href="@{/events(from=${from},to=${to},type='기타')}" target="_blank">프로그램이 제거된 PC</a>가 없는지</li>
             <li><a th:href="@{/audit}" target="_blank">관리 이력</a>에 승인 없이 등록된 매체나 이상한 작업이 없는지</li>
+            <th:block th:unless="${privacyPcs.isEmpty()}">
+                <li>개인정보처리 PC의 <a th:href="@{/events(from=${from},to=${to},type='반출',privacy=true)}" target="_blank">파일 반출 기록</a>이
+                    매체 등록 때 승인한 사용 목적과 맞는지 (승인 안 된 개인정보 파일이 나가지 않았는지)</li>
+                <li>개인정보처리 PC용 매체 중 사용이 끝났는데 회수하지 않은 것이 없는지, 처리자가 바뀐 PC가 없는지</li>
+            </th:block>
         </ul>
     </div>
 

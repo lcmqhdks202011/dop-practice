@@ -5,13 +5,19 @@
 <div th:replace="~{fragments :: top('pcs')}"></div>
 <main>
     <h1>PC 적용 현황</h1>
-    <p class="hint">감시 프로그램은 30초마다 서버에 연결합니다. 5분 넘게 연결이 없으면 '꺼져 있음', 7일 넘게 없으면 프로그램이 지워졌을 수 있으니 확인하세요.</p>
+    <div class="toolbar">
+        <a class="btn sub" th:href="@{/pcs/export}">PC 목록 엑셀 내려받기</a>
+    </div>
+    <p class="hint">감시 프로그램은 30초마다 서버에 연결합니다. 5분 넘게 연결이 없으면 '꺼져 있음', 7일 넘게 없으면 프로그램이 지워졌을 수 있으니 확인하세요.
+        PC 이름을 누르면 개인정보처리 PC 지정과 키보드·마우스 지정 포트를 정할 수 있습니다.</p>
     <div class="table-wrap">
         <table>
-            <tr><th>PC</th><th>상태</th><th>마지막 연결</th><th>사용자</th><th>IP</th><th>윈도우</th><th>프로그램 버전</th><th>적용된 정책</th><th>처음 연결</th><th></th></tr>
-            <tr th:if="${pcStatuses.isEmpty()}"><td colspan="10">아직 연결된 PC가 없습니다.</td></tr>
+            <tr><th>PC</th><th>구분</th><th>상태</th><th>마지막 연결</th><th>사용자</th><th>IP</th><th>윈도우</th><th>프로그램 버전</th><th>적용된 정책</th><th>처음 연결</th><th></th></tr>
+            <tr th:if="${pcStatuses.isEmpty()}"><td colspan="11">아직 연결된 PC가 없습니다.</td></tr>
             <tr th:each="s : ${pcStatuses}">
-                <td th:text="${s.pc.name}"></td>
+                <td><a th:href="@{/pcs/{id}(id=${s.pc.id})}" th:text="${s.pc.name}"></a></td>
+                <td><th:block th:if="${s.pc.privacyPc}"><span class="badge privacy">개인정보처리</span>
+                    <div class="hint" th:text="${s.pc.privacyHandler}"></div></th:block></td>
                 <td><span class="badge" th:classappend="${s.level}" th:text="${s.status}"></span></td>
                 <td th:text="${s.pc.lastSeenAt == null} ? '' : ${#temporals.format(s.pc.lastSeenAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
                 <td th:text="${s.pc.lastUser}"></td>

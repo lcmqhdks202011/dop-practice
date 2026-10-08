@@ -10,6 +10,8 @@ import usbcontrol.domain.Pc;
 import usbcontrol.domain.PcRepository;
 import usbcontrol.domain.UsbEvent;
 import usbcontrol.domain.UsbEventRepository;
+import usbcontrol.service.InputPortService;
+import usbcontrol.service.InputPortService.InputDevice;
 import usbcontrol.service.PolicyService;
 import usbcontrol.service.PolicyService.AgentPolicy;
 import usbcontrol.service.SettingsService;
@@ -26,13 +28,18 @@ public class AgentApiController {
 
     public static final String KEY_HEADER = "X-Agent-Key";
 
+    /** inputDevices: 지금 꽂혀 있는 키보드·마우스 (2.1.0 이상). 예전 버전은 null */
     public record CheckinRequest(String pcName, String userName, String agentVersion,
-                                 String policyVersion, String os) {
+                                 String policyVersion, String os, List<InputDevice> inputDevices) {
     }
 
+    /** fileName, fileSize: 개인정보처리 PC에서 USB로 복사한 파일 (2.2.0 이상) */
     public record EventItem(LocalDateTime occurredAt, String userName, String action,
-                            String kind, String deviceName, String instanceId) {
+                            String kind, String deviceName, String instanceId, String port,
+                            String fileName, Long fileSize) {
     }
+
+    private static final int MAX_INPUT_DEVICES = 20;
 
     public record EventsRequest(String pcName, List<EventItem> events) {
     }
@@ -44,13 +51,15 @@ public class AgentApiController {
     private final PolicyService policies;
     private final PcRepository pcs;
     private final UsbEventRepository events;
+    private final InputPortService inputPorts;
 
     public AgentApiController(SettingsService settings, PolicyService policies,
-                              PcRepository pcs, UsbEventRepository events) {
+                              PcRepository pcs, UsbEventRepository events, InputPortService inputPorts) {
         this.settings = settings;
         this.policies = policies;
         this.pcs = pcs;
         this.events = events;
+        this.inputPorts = inputPorts;
     }
 
     /** 30초마다: PC 상태를 알리고, 최신 허용 목록과 설정을 받아 갑니다. */
@@ -69,6 +78,12 @@ public class AgentApiController {
         pc.setAppliedPolicyVersion(cut(body.policyVersion(), 255));
         pc.setOs(cut(body.os(), 255));
         pc.setIpAddress(request.getRemoteAddr());
+        pc.setInputDevicesJson(body.inputDevices() == null ? null : inputPorts.toJson(body.inputDevices().stream()
+                .filter(d -> d != null && UsbEvent.INPUT_KINDS.contains(d.kind()) && !blank(d.port()))
+                .limit(MAX_INPUT_DEVICES)
+                .map(d -> new InputDevice(d.kind(), cut(d.name(), 100), cut(d.deviceId(), 200),
+                        cut(d.port(), 200), cut(d.portLabel(), 50)))
+                .toList()));
         return ResponseEntity.ok(policies.policyFor(pc.getName()));
     }
 
@@ -86,7 +101,9 @@ public class AgentApiController {
                 .map(e -> new UsbEvent(
                         e.occurredAt() == null ? now : e.occurredAt(), now, pc.getName(),
                         cut(e.userName(), 255), cut(e.action(), 255), cut(e.kind(), 255),
-                        cut(e.deviceName(), 255), cut(e.instanceId(), 500)))
+                        cut(e.deviceName(), 255), cut(e.instanceId(), 500), cut(e.port(), 255))
+                        .withFile(cut(e.fileName(), 1000), e.fileSize())
+                        .withPrivacyPc(pc.isPrivacyPc()))
                 .toList();
         events.saveAll(saved);
         return ResponseEntity.ok(new EventsResponse(saved.size()));

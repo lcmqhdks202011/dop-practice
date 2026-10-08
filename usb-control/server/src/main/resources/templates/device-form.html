@@ -33,10 +33,18 @@
             <div><label>적용 PC</label>
                 <select th:field="*{pcName}">
                     <option value="">전체 PC</option>
-                    <option th:each="n : ${pcNames}" th:value="${n}" th:text="${n}"></option>
-                </select></div>
+                    <option th:each="n : ${pcNames}" th:value="${n}"
+                            th:text="${#lists.contains(privacyPcNames, n)} ? ${n} + ' (개인정보처리 PC)' : ${n}"></option>
+                </select>
+                <div class="hint">개인정보처리 PC에는 그 PC를 골라 등록한 매체만 열립니다. '전체 PC'로 등록하면 개인정보처리 PC에서는 막힙니다.</div></div>
             <div><label>만료일</label><input type="date" th:field="*{expiresOn}">
-                <div class="hint">비우면 만료 없음. 만료일 다음 날부터 자동으로 차단됩니다.</div></div>
+                <div class="hint" th:text="'비우면 만료 없음. 만료일 다음 날부터 자동으로 차단됩니다. 개인정보처리 PC용은 꼭 넣어야 하고 ' + ${maxDays} + '일을 넘길 수 없습니다.'"></div>
+                <div class="field-error" th:errors="*{expiresOn}"></div></div>
+            <div class="wide"><label class="check"><input type="checkbox" th:field="*{writeAllowed}">
+                <span>개인정보처리 PC에서 쓰기(반출) 허용
+                    <span class="hint" style="display:block">체크하지 않으면 개인정보처리 PC에서 읽기 전용으로 열립니다. 쓰기를 허용해도 복사한 파일은 모두 기록됩니다.
+                        사용 목적에 반출 내용(무엇을, 어디로)을 적어 두세요.</span></span></label>
+                <div class="field-error" th:errors="*{writeAllowed}"></div></div>
         </div>
         <div style="margin-top:16px" th:if="${device == null or !device.revoked}">
             <button type="submit" th:text="${device == null} ? '등록' : '저장'">저장</button>

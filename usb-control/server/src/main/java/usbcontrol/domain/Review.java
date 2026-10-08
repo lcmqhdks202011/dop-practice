@@ -20,6 +20,13 @@ public class Review {
     private long blockedCount;
     private long allowedCount;
     private long activeDeviceCount;
+    /** 개인정보처리 PC만 따로 센 건수 */
+    @Column(columnDefinition = "bigint default 0 not null")
+    private long privacyBlockedCount;
+    @Column(columnDefinition = "bigint default 0 not null")
+    private long privacyAllowedCount;
+    @Column(columnDefinition = "bigint default 0 not null")
+    private long privacyExportCount;
     private String result;
     @Column(length = 4000)
     private String memo;
@@ -40,6 +47,13 @@ public class Review {
         this.memo = memo;
     }
 
+    public Review withPrivacyCounts(long blocked, long allowed, long exported) {
+        this.privacyBlockedCount = blocked;
+        this.privacyAllowedCount = allowed;
+        this.privacyExportCount = exported;
+        return this;
+    }
+
     public Long getId() { return id; }
     public LocalDateTime getReviewedAt() { return reviewedAt; }
     public String getReviewer() { return reviewer; }
@@ -48,6 +62,9 @@ public class Review {
     public long getBlockedCount() { return blockedCount; }
     public long getAllowedCount() { return allowedCount; }
     public long getActiveDeviceCount() { return activeDeviceCount; }
+    public long getPrivacyBlockedCount() { return privacyBlockedCount; }
+    public long getPrivacyAllowedCount() { return privacyAllowedCount; }
+    public long getPrivacyExportCount() { return privacyExportCount; }
     public String getResult() { return result; }
     public String getMemo() { return memo; }
 }

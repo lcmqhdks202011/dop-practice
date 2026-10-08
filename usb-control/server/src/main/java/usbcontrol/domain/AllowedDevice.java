@@ -30,6 +30,9 @@ public class AllowedDevice {
     private LocalDateTime registeredAt;
     private String registeredBy;
     private LocalDate expiresOn;
+    /** 개인정보처리 PC에서도 쓰기(반출)를 허용. 다른 PC에서는 원래 쓰기가 됩니다. */
+    @Column(columnDefinition = "boolean default false not null")
+    private boolean writeAllowed;
 
     private boolean revoked;
     private LocalDateTime revokedAt;
@@ -46,6 +49,11 @@ public class AllowedDevice {
 
     public boolean appliesTo(String pc) {
         return pcName == null || pcName.isBlank() || pcName.equalsIgnoreCase(pc);
+    }
+
+    /** 개인정보처리 PC에는 그 PC 전용으로 등록한 매체만 (전체 PC용, 별표 줄은 안 됨) */
+    public boolean appliesToPrivacyPc(String pc) {
+        return pcName != null && pcName.equalsIgnoreCase(pc) && !isWildcard();
     }
 
     public String getStatus() {
@@ -81,6 +89,8 @@ public class AllowedDevice {
     public void setRegisteredBy(String registeredBy) { this.registeredBy = registeredBy; }
     public LocalDate getExpiresOn() { return expiresOn; }
     public void setExpiresOn(LocalDate expiresOn) { this.expiresOn = expiresOn; }
+    public boolean isWriteAllowed() { return writeAllowed; }
+    public void setWriteAllowed(boolean writeAllowed) { this.writeAllowed = writeAllowed; }
     public boolean isRevoked() { return revoked; }
     public void setRevoked(boolean revoked) { this.revoked = revoked; }
     public LocalDateTime getRevokedAt() { return revokedAt; }
